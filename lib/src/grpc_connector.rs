@@ -38,7 +38,7 @@ impl GrpcConnector {
             //println!("http");
             Channel::builder(self.uri.clone()).connect().await?
         } else {
-            //println!("https");
+            println!("https");
             let mut config = ClientConfig::new();
 
             config.alpn_protocols.push(b"h2".to_vec());
@@ -46,11 +46,13 @@ impl GrpcConnector {
                 .root_store
                 .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 
+            dbg!(&config.alpn_protocols);
             let tls = ClientTlsConfig::new()
                 .rustls_client_config(config)
                 .domain_name(self.uri.host().unwrap());
 
-            Channel::builder(self.uri.clone()).tls_config(tls)?.connect().await?
+            dbg!(&tls);
+            dbg!(Channel::builder(self.uri.clone()).tls_config(tls)?.connect().await)?
         };
 
         Ok(CompactTxStreamerClient::new(channel))
