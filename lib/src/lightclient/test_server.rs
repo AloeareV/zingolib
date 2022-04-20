@@ -50,7 +50,7 @@ pub async fn create_test_server(
     } else {
         format!("http://{}", server_port)
     };
-    let addr = server_port.parse().unwrap();
+    let addr: std::net::SocketAddr = server_port.parse().unwrap();
 
     let mut config = LightClientConfig::create_unconnected("main".to_string(), None);
     config.server = uri.replace("127.0.0.1", "localhost").parse().unwrap();
@@ -108,16 +108,14 @@ pub async fn create_test_server(
                     ),
                 )
                 .unwrap();
-            let mut tls = ServerTlsConfig::new();
-            tls.rustls_server_config(server_config);
-            Server::builder().tls_config(tls).unwrap()
+            let mut service = hyper::client::HttpConnector::new();
+            service.enforce_http(false);
         } else {
-            Server::builder()
         }
-        .add_service(svc)
-        .serve_with_shutdown(addr, stop_rx.map(drop))
-        .await
-        .unwrap();
+        //        .add_service(svc)
+        //        .serve_with_shutdown(addr, stop_rx.map(drop))
+        //        .await
+        //        .unwrap();
 
         println!("Server stopped");
     });

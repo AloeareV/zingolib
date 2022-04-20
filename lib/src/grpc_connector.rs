@@ -50,11 +50,12 @@ impl GrpcConnector {
             #[cfg(test)]
             add_tls_test_config(&mut config).await;
 
-            let tls = ClientTlsConfig::new()
-                .rustls_client_config(config)
-                .domain_name(self.uri.host().unwrap());
+            //            let tls = ClientTlsConfig::new()
+            //              .rustls_client_config(config)
+            //            .domain_name(self.uri.host().unwrap());
 
-            Channel::builder(self.uri.clone()).tls_config(tls)?.connect().await?
+            //      Channel::builder(self.uri.clone()).tls_config(tls)?.connect().await?
+            todo!()
         };
 
         Ok(CompactTxStreamerClient::new(channel))
