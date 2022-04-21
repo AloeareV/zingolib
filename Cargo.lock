@@ -3017,6 +3017,7 @@ dependencies = [
  "tower-service",
  "tracing",
  "tracing-futures",
+ "webpki-roots 0.22.3",
 ]
 
 [[package]]
@@ -3384,6 +3385,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "webpki-roots"
+version = "0.22.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44d8de8415c823c8abd270ad483c6feeac771fad964890779f9a8cb24fbbc1bf"
+dependencies = [
+ "webpki 0.22.0",
+]
+
+[[package]]
 name = "which"
 version = "4.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3610,7 +3620,7 @@ dependencies = [
  "tonic",
  "tonic-build",
  "tracing-subscriber",
- "webpki-roots",
+ "webpki-roots 0.21.1",
  "zcash_client_backend",
  "zcash_primitives",
  "zcash_proofs",
