@@ -19,9 +19,8 @@ use tempdir::TempDir;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use tokio_rustls::rustls::ServerConfig;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
+use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::merkle_tree::CommitmentTree;
@@ -80,86 +79,11 @@ pub async fn create_test_server(
 
         ready_tx.send(()).unwrap();
 
-        if https {
-            #[derive(Debug)]
-            struct ConnInfo {
-                addr: std::net::SocketAddr,
-                certificates: Vec<tokio_rustls::rustls::Certificate>,
-            }
-            let file = "localhost.pem";
-            use std::fs::File;
-            use std::io::BufReader;
-            let (cert, key) = (
-                tokio_rustls::rustls::Certificate(
-                    rustls_pemfile::certs(&mut BufReader::new(File::open(file).unwrap()))
-                        .unwrap()
-                        .pop()
-                        .unwrap(),
-                ),
-                tokio_rustls::rustls::PrivateKey(
-                    rustls_pemfile::pkcs8_private_keys(&mut BufReader::new(File::open(file).unwrap()))
-                        .unwrap()
-                        .pop()
-                        .expect("empty vec of private keys??"),
-                ),
-            );
-            let mut tls = ServerConfig::builder()
-                .with_safe_defaults()
-                .with_no_client_auth()
-                .with_single_cert(vec![cert], key)
-                .unwrap();
-            tls.alpn_protocols = vec![b"h2".to_vec()];
-
-            let svc = Server::builder().add_service(svc).into_service();
-
-            let mut http = hyper::server::conn::Http::new();
-            http.http2_only(true);
-
-            let listener = tokio::net::TcpListener::bind(uri).await.unwrap();
-            let tls_acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(tls));
-
-            loop {
-                let (conn, addr) = match listener.accept().await {
-                    Ok(incoming) => incoming,
-                    Err(e) => {
-                        eprintln!("Error accepting connection: {}", e);
-                        continue;
-                    }
-                };
-
-                let http = http.clone();
-                let tls_acceptor = tls_acceptor.clone();
-                let svc = svc.clone();
-
-                tokio::spawn(async move {
-                    let mut certificates = Vec::new();
-
-                    let conn = tls_acceptor
-                        .accept_with(conn, |info| {
-                            if let Some(certs) = info.peer_certificates() {
-                                for cert in certs {
-                                    certificates.push(cert.clone());
-                                }
-                            }
-                        })
-                        .await
-                        .unwrap();
-
-                    use tower_http::ServiceBuilderExt;
-                    let svc = tower::ServiceBuilder::new()
-                        .add_extension(Arc::new(ConnInfo { addr, certificates }))
-                        .service(svc);
-
-                    http.serve_connection(conn, svc).await.unwrap();
-                });
-            }
-        } else {
-            Server::builder()
-        }
-        .add_service(svc)
-        .serve_with_shutdown(addr, stop_rx.map(drop))
-        .await
-        .unwrap();
+        Server::builder()
+            .add_service(svc)
+            .serve_with_shutdown(addr, stop_rx.map(drop))
+            .await
+            .unwrap();
 
         println!("Server stopped");
     });
@@ -576,22 +500,4 @@ impl CompactTxStreamer for TestGRPCService {
     ) -> Result<tonic::Response<Self::GetMempoolStreamStream>, tonic::Status> {
         todo!()
     }
-}
-
-pub(crate) fn get_tls_test_pem() -> (Certificate, Identity) {
-    use std::{fs::File, io::BufReader};
-    let file = "localhost.pem";
-    let (cert, key) = (
-        Certificate::from_pem(
-            rustls_pemfile::certs(&mut BufReader::new(File::open(file).unwrap()))
-                .unwrap()
-                .pop()
-                .unwrap(),
-        ),
-        rustls_pemfile::pkcs8_private_keys(&mut BufReader::new(File::open(file).unwrap()))
-            .unwrap()
-            .pop()
-            .expect("empty vec of private keys??"),
-    );
-    (cert.clone(), Identity::from_pem(cert, key))
 }
