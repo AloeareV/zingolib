@@ -999,6 +999,16 @@ async fn aborted_resync() {
 }
 
 #[tokio::test]
+async fn basic_network() {
+    let (data, config, ready_rx, stop_tx, h1) = create_test_server(false).await;
+
+    ready_rx.await.unwrap();
+
+    let lc = LightClient::test_new(&config, None, 0).await.unwrap();
+    h1.await.unwrap();
+}
+
+#[tokio::test]
 async fn no_change() {
     for https in [true, false] {
         let (data, config, ready_rx, stop_tx, h1) = create_test_server(https).await;
