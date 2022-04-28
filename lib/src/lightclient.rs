@@ -1559,4 +1559,7 @@ impl LightClient {
 pub mod tests;
 
 #[cfg(test)]
+pub mod canaries;
+
+#[cfg(test)]
 pub(crate) mod test_server;
