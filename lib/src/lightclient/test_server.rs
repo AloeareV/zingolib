@@ -122,12 +122,13 @@ pub async fn create_test_server(
         ready_transmitter.send(()).unwrap();
         loop {
             let mut accepted = Box::pin(listener.accept().fuse());
-            let (conn, _addr) = match futures::select_biased!(
+            let conn_addr = futures::select_biased!(
                 _ = (&mut stop_fused).fuse() => {
                 break
             }
                 conn_addr = accepted => conn_addr,
-            ) {
+            );
+            let (conn, _addr) = match conn_addr {
                 Ok(incoming) => incoming,
                 Err(e) => {
                     eprintln!("Error accepting connection: {}", e);
