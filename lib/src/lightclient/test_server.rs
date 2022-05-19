@@ -42,6 +42,7 @@ pub async fn create_test_server(
 ) {
     let (ready_transmitter, ready_receiver) = oneshot::channel();
     let (stop_transmitter, stop_receiver) = oneshot::channel();
+    let mut stop_fused = stop_receiver.fuse();
 
     let port = portpicker::pick_unused_port().unwrap();
     let server_port = format!("127.0.0.1:{}", port);
@@ -118,7 +119,6 @@ pub async fn create_test_server(
             None
         };
 
-        let mut stop_fused = stop_receiver.fuse();
         ready_transmitter.send(()).unwrap();
         loop {
             let mut accepted = Box::pin(listener.accept().fuse());
