@@ -123,9 +123,7 @@ pub async fn create_test_server(
         loop {
             let mut accepted = Box::pin(listener.accept().fuse());
             let conn_addr = futures::select_biased!(
-                _ = (&mut stop_fused).fuse() => {
-                break
-            }
+                _ = (&mut stop_fused).fuse() => break,
                 conn_addr = accepted => conn_addr,
             );
             let (conn, _addr) = match conn_addr {
@@ -144,7 +142,7 @@ pub async fn create_test_server(
                 let svc = tower::ServiceBuilder::new().service(svc);
                 if https {
                     let mut certificates = Vec::new();
-                    let conn = tls_acceptor
+                    let https_conn = tls_acceptor
                         .unwrap()
                         .accept_with(conn, |info| {
                             if let Some(certs) = info.peer_certificates() {
@@ -158,7 +156,7 @@ pub async fn create_test_server(
 
                     #[allow(unused_must_use)]
                     {
-                        http.serve_connection(conn, svc).await;
+                        http.serve_connection(https_conn, svc).await;
                     };
                 } else {
                     #[allow(unused_must_use)]
