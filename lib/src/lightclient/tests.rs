@@ -27,7 +27,7 @@ use crate::blaze::fetch_full_transaction::FetchFullTxns;
 use crate::blaze::test_utils::{FakeCompactBlockList, FakeTransaction};
 
 use crate::compact_formats::{CompactOutput, CompactTransaction, Empty};
-use crate::lightclient::test_server::{create_test_server, mine_pending_blocks, mine_random_blocks};
+use crate::lightclient::test_server::{mine_pending_blocks, mine_random_blocks, TestServer};
 use crate::lightclient::LightClient;
 use crate::lightwallet::data::WalletTx;
 
@@ -138,7 +138,7 @@ fn new_wallet_from_vk() {
 #[tokio::test]
 async fn basic_no_wallet_transactions() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -169,7 +169,7 @@ async fn basic_no_wallet_transactions() {
 #[tokio::test]
 async fn z_incoming_z_outgoing() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -311,7 +311,7 @@ async fn z_incoming_z_outgoing() {
 #[tokio::test]
 async fn multiple_incoming_same_transaction() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -466,7 +466,7 @@ async fn multiple_incoming_same_transaction() {
 #[tokio::test]
 async fn z_incoming_multiz_outgoing() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -524,7 +524,7 @@ async fn z_incoming_multiz_outgoing() {
 async fn z_to_z_scan_together() {
     // Create an incoming transaction, and then send that transaction, and scan everything together, to make sure it works.
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -588,7 +588,7 @@ async fn z_to_z_scan_together() {
 #[tokio::test]
 async fn z_incoming_viewkey() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -686,7 +686,7 @@ async fn z_incoming_viewkey() {
 #[tokio::test]
 async fn t_incoming_t_outgoing() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -786,7 +786,7 @@ async fn t_incoming_t_outgoing() {
 #[tokio::test]
 async fn mixed_transaction() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -890,7 +890,7 @@ async fn mixed_transaction() {
 #[tokio::test]
 async fn aborted_resync() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -1010,7 +1010,7 @@ async fn aborted_resync() {
 #[tokio::test]
 async fn no_change() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -1068,7 +1068,7 @@ async fn no_change() {
 async fn recover_at_checkpoint() {
     // 1. Wait for test server to start
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
         ready_receiver.await.unwrap();
 
         // Get checkpoint at 1220000
@@ -1155,7 +1155,7 @@ async fn recover_at_checkpoint() {
 #[tokio::test]
 async fn witness_clearing() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -1262,7 +1262,7 @@ async fn witness_clearing() {
 #[tokio::test]
 async fn mempool_clearing() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 
@@ -1357,7 +1357,7 @@ async fn mempool_clearing() {
 #[tokio::test]
 async fn mempool_and_balance() {
     for https in [true, false] {
-        let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+        let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
 
         ready_receiver.await.unwrap();
 

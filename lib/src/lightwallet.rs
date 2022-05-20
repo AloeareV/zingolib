@@ -1368,7 +1368,7 @@ mod test {
     use crate::{
         blaze::test_utils::{incw_to_string, FakeCompactBlockList, FakeTransaction},
         lightclient::{
-            test_server::{create_test_server, mine_pending_blocks, mine_random_blocks},
+            test_server::{mine_pending_blocks, mine_random_blocks, TestServer},
             LightClient,
         },
     };
@@ -1376,7 +1376,7 @@ mod test {
     #[tokio::test]
     async fn z_t_note_selection() {
         for https in [true, false] {
-            let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+            let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
             ready_receiver.await.unwrap();
 
             let mut lc = LightClient::test_new(&config, None, 0).await.unwrap();
@@ -1525,7 +1525,7 @@ mod test {
     #[tokio::test]
     async fn multi_z_note_selection() {
         for https in [true, false] {
-            let (data, config, ready_receiver, stop_transmitter, h1) = create_test_server(https).await;
+            let (data, config, ready_receiver, stop_transmitter, h1) = TestServer::create_test_server(https).await;
             ready_receiver.await.unwrap();
 
             let mut lc = LightClient::test_new(&config, None, 0).await.unwrap();

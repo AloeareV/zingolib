@@ -31,151 +31,154 @@ use zcash_primitives::transaction::{Transaction, TxId};
 use super::lightclient_config::LightClientConfig;
 use super::LightClient;
 
-pub async fn create_test_server(
-    https: bool,
-) -> (
-    Arc<RwLock<TestServerData>>,
-    LightClientConfig,
-    oneshot::Receiver<()>,
-    oneshot::Sender<()>,
-    JoinHandle<()>,
-) {
-    let (ready_transmitter, ready_receiver) = oneshot::channel();
-    let (stop_transmitter, stop_receiver) = oneshot::channel();
-    let mut stop_fused = stop_receiver.fuse();
+pub struct TestServer {}
+impl TestServer {
+    pub async fn create_test_server(
+        https: bool,
+    ) -> (
+        Arc<RwLock<TestServerData>>,
+        LightClientConfig,
+        oneshot::Receiver<()>,
+        oneshot::Sender<()>,
+        JoinHandle<()>,
+    ) {
+        let (ready_transmitter, ready_receiver) = oneshot::channel();
+        let (stop_transmitter, stop_receiver) = oneshot::channel();
+        let mut stop_fused = stop_receiver.fuse();
 
-    let port = portpicker::pick_unused_port().unwrap();
-    let server_port = format!("127.0.0.1:{}", port);
-    let uri = if https {
-        format!("https://{}", server_port)
-    } else {
-        format!("http://{}", server_port)
-    };
-    let addr: std::net::SocketAddr = server_port.parse().unwrap();
-
-    let mut config = LightClientConfig::create_unconnected("main".to_string(), None);
-    config.server = uri.replace("127.0.0.1", "localhost").parse().unwrap();
-
-    let (service, data) = TestGRPCService::new(config.clone());
-
-    let (data_dir_transmitter, data_dir_receiver) = oneshot::channel();
-
-    let h1 = tokio::spawn(async move {
-        let svc = CompactTransactionStreamerServer::new(service);
-
-        // We create the temp dir here, so that we can clean it up after the test runs
-        let temp_dir = tempfile::Builder::new()
-            .prefix(&format!("test{}", port).as_str())
-            .tempdir()
-            .unwrap();
-
-        // Send the path name. Do into_path() to preserve the temp directory
-        data_dir_transmitter
-            .send(
-                temp_dir
-                    .into_path()
-                    .canonicalize()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-            )
-            .unwrap();
-
-        let mut tls;
-        let svc = Server::builder().add_service(svc).into_service();
-
-        let mut http = hyper::server::conn::Http::new();
-        http.http2_only(true);
-
-        let nameuri: std::string::String = uri.replace("https://", "").replace("http://", "").parse().unwrap();
-        let listener = tokio::net::TcpListener::bind(nameuri).await.unwrap();
-        let tls_acceptor = if https {
-            let file = "localhost.pem";
-            use std::fs::File;
-            use std::io::BufReader;
-            let (cert, key) = (
-                tokio_rustls::rustls::Certificate(
-                    rustls_pemfile::certs(&mut BufReader::new(File::open(file).unwrap()))
-                        .unwrap()
-                        .pop()
-                        .unwrap(),
-                ),
-                tokio_rustls::rustls::PrivateKey(
-                    rustls_pemfile::pkcs8_private_keys(&mut BufReader::new(File::open(file).unwrap()))
-                        .unwrap()
-                        .pop()
-                        .expect("empty vec of private keys??"),
-                ),
-            );
-            tls = ServerConfig::builder()
-                .with_safe_defaults()
-                .with_no_client_auth()
-                .with_single_cert(vec![cert], key)
-                .unwrap();
-            tls.alpn_protocols = vec![b"h2".to_vec()];
-            Some(tokio_rustls::TlsAcceptor::from(Arc::new(tls)))
+        let port = portpicker::pick_unused_port().unwrap();
+        let server_port = format!("127.0.0.1:{}", port);
+        let uri = if https {
+            format!("https://{}", server_port)
         } else {
-            None
+            format!("http://{}", server_port)
         };
+        let addr: std::net::SocketAddr = server_port.parse().unwrap();
 
-        ready_transmitter.send(()).unwrap();
-        loop {
-            let mut accepted = Box::pin(listener.accept().fuse());
-            let conn_addr = futures::select_biased!(
-                _ = (&mut stop_fused).fuse() => break,
-                conn_addr = accepted => conn_addr,
-            );
-            let (conn, _addr) = match conn_addr {
-                Ok(incoming) => incoming,
-                Err(e) => {
-                    eprintln!("Error accepting connection: {}", e);
-                    continue;
-                }
+        let mut config = LightClientConfig::create_unconnected("main".to_string(), None);
+        config.server = uri.replace("127.0.0.1", "localhost").parse().unwrap();
+
+        let (service, data) = TestGRPCService::new(config.clone());
+
+        let (data_dir_transmitter, data_dir_receiver) = oneshot::channel();
+
+        let h1 = tokio::spawn(async move {
+            let svc = CompactTransactionStreamerServer::new(service);
+
+            // We create the temp dir here, so that we can clean it up after the test runs
+            let temp_dir = tempfile::Builder::new()
+                .prefix(&format!("test{}", port).as_str())
+                .tempdir()
+                .unwrap();
+
+            // Send the path name. Do into_path() to preserve the temp directory
+            data_dir_transmitter
+                .send(
+                    temp_dir
+                        .into_path()
+                        .canonicalize()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string(),
+                )
+                .unwrap();
+
+            let mut tls;
+            let svc = Server::builder().add_service(svc).into_service();
+
+            let mut http = hyper::server::conn::Http::new();
+            http.http2_only(true);
+
+            let nameuri: std::string::String = uri.replace("https://", "").replace("http://", "").parse().unwrap();
+            let listener = tokio::net::TcpListener::bind(nameuri).await.unwrap();
+            let tls_acceptor = if https {
+                let file = "localhost.pem";
+                use std::fs::File;
+                use std::io::BufReader;
+                let (cert, key) = (
+                    tokio_rustls::rustls::Certificate(
+                        rustls_pemfile::certs(&mut BufReader::new(File::open(file).unwrap()))
+                            .unwrap()
+                            .pop()
+                            .unwrap(),
+                    ),
+                    tokio_rustls::rustls::PrivateKey(
+                        rustls_pemfile::pkcs8_private_keys(&mut BufReader::new(File::open(file).unwrap()))
+                            .unwrap()
+                            .pop()
+                            .expect("empty vec of private keys??"),
+                    ),
+                );
+                tls = ServerConfig::builder()
+                    .with_safe_defaults()
+                    .with_no_client_auth()
+                    .with_single_cert(vec![cert], key)
+                    .unwrap();
+                tls.alpn_protocols = vec![b"h2".to_vec()];
+                Some(tokio_rustls::TlsAcceptor::from(Arc::new(tls)))
+            } else {
+                None
             };
 
-            let http = http.clone();
-            let tls_acceptor = tls_acceptor.clone();
-            let svc = svc.clone();
+            ready_transmitter.send(()).unwrap();
+            loop {
+                let mut accepted = Box::pin(listener.accept().fuse());
+                let conn_addr = futures::select_biased!(
+                    _ = (&mut stop_fused).fuse() => break,
+                    conn_addr = accepted => conn_addr,
+                );
+                let (conn, _addr) = match conn_addr {
+                    Ok(incoming) => incoming,
+                    Err(e) => {
+                        eprintln!("Error accepting connection: {}", e);
+                        continue;
+                    }
+                };
 
-            tokio::spawn(async move {
-                let svc = tower::ServiceBuilder::new().service(svc);
-                if https {
-                    let mut certificates = Vec::new();
-                    let https_conn = tls_acceptor
-                        .unwrap()
-                        .accept_with(conn, |info| {
-                            if let Some(certs) = info.peer_certificates() {
-                                for cert in certs {
-                                    certificates.push(cert.clone());
+                let http = http.clone();
+                let tls_acceptor = tls_acceptor.clone();
+                let svc = svc.clone();
+
+                tokio::spawn(async move {
+                    let svc = tower::ServiceBuilder::new().service(svc);
+                    if https {
+                        let mut certificates = Vec::new();
+                        let https_conn = tls_acceptor
+                            .unwrap()
+                            .accept_with(conn, |info| {
+                                if let Some(certs) = info.peer_certificates() {
+                                    for cert in certs {
+                                        certificates.push(cert.clone());
+                                    }
                                 }
-                            }
-                        })
-                        .await
-                        .unwrap();
+                            })
+                            .await
+                            .unwrap();
 
-                    #[allow(unused_must_use)]
-                    {
-                        http.serve_connection(https_conn, svc).await;
-                    };
-                } else {
-                    #[allow(unused_must_use)]
-                    {
-                        http.serve_connection(conn, svc).await;
-                    };
-                }
-            });
-        }
+                        #[allow(unused_must_use)]
+                        {
+                            http.serve_connection(https_conn, svc).await;
+                        };
+                    } else {
+                        #[allow(unused_must_use)]
+                        {
+                            http.serve_connection(conn, svc).await;
+                        };
+                    }
+                });
+            }
 
-        println!("Server stopped");
-    });
+            println!("Server stopped");
+        });
 
-    log::info!("creating data dir");
-    let data_dir = data_dir_receiver.await.unwrap();
-    println!("GRPC Server listening on: {}. With datadir {}", addr, data_dir);
-    config.data_dir = Some(data_dir);
+        log::info!("creating data dir");
+        let data_dir = data_dir_receiver.await.unwrap();
+        println!("GRPC Server listening on: {}. With datadir {}", addr, data_dir);
+        config.data_dir = Some(data_dir);
 
-    (data, config, ready_receiver, stop_transmitter, h1)
+        (data, config, ready_receiver, stop_transmitter, h1)
+    }
 }
 
 pub async fn mine_random_blocks(
