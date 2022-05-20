@@ -1517,8 +1517,7 @@ mod test {
             assert_eq!(utxos.len(), 1);
 
             // Shutdown everything cleanly
-            stop_transmitter.send(()).unwrap();
-            h1.await.unwrap();
+            TestServer::clean_shutdown(stop_transmitter, h1).await;
         }
     }
 
@@ -1594,8 +1593,7 @@ mod test {
             assert_eq!(utxos.len(), 0);
 
             // Shutdown everything cleanly
-            stop_transmitter.send(()).unwrap();
-            h1.await.unwrap();
+            TestServer::clean_shutdown(stop_transmitter, h1).await;
         }
     }
 }

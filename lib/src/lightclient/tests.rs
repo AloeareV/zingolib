@@ -301,8 +301,7 @@ async fn z_incoming_z_outgoing() {
         assert_eq!(notes["spent_notes"][0]["spent_at_height"].as_u64().unwrap(), 17);
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -456,8 +455,7 @@ async fn multiple_incoming_same_transaction() {
         assert_eq!(transactions[4]["outgoing_metadata"][0]["memo"].is_null(), true);
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -513,8 +511,7 @@ async fn z_incoming_multiz_outgoing() {
         }
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -578,8 +575,7 @@ async fn z_to_z_scan_together() {
         assert_eq!(list[1]["outgoing_metadata"][0]["value"].as_u64().unwrap(), spent_value);
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -676,8 +672,7 @@ async fn z_incoming_viewkey() {
         assert_eq!(list[1]["outgoing_metadata"][0]["value"].as_u64().unwrap(), sent_value);
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -776,8 +771,7 @@ async fn t_incoming_t_outgoing() {
         );
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -880,8 +874,7 @@ async fn mixed_transaction() {
         );
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -1000,8 +993,7 @@ async fn aborted_resync() {
         }
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -1057,8 +1049,7 @@ async fn no_change() {
         assert_eq!(notes["spent_utxos"][0]["spent"], sent_transaction_id);
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -1145,8 +1136,7 @@ async fn recover_at_checkpoint() {
         // );
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -1252,8 +1242,7 @@ async fn witness_clearing() {
         assert_eq!(witnesses.len(), 0);
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -1347,8 +1336,7 @@ async fn mempool_clearing() {
         assert_eq!(transactions.len(), 1);
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
@@ -1419,8 +1407,7 @@ async fn mempool_and_balance() {
         assert_eq!(bal["unverified_zbalance"].as_u64().unwrap(), 0);
 
         // Shutdown everything cleanly
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
