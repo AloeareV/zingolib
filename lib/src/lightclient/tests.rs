@@ -160,9 +160,7 @@ async fn basic_no_wallet_transactions() {
 
         mine_random_blocks(&mut fcbl, &data, &lc, 10).await;
         assert_eq!(lc.wallet.last_scanned_height().await, 10);
-
-        stop_transmitter.send(()).unwrap();
-        h1.await.unwrap();
+        TestServer::clean_shutdown(stop_transmitter, h1).await;
     }
 }
 
