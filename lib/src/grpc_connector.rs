@@ -53,7 +53,12 @@ impl GrpcConnector {
                 let mut roots = RootCertStore::empty();
 
                 #[cfg(test)]
-                add_test_cert_to_roots(&mut roots);
+                {
+                    let fd = std::fs::File::open("localhost.pem").unwrap();
+                    let mut buf = std::io::BufReader::new(&fd);
+                    let certs = rustls_pemfile::certs(&mut buf).unwrap();
+                    roots.add_parsable_certificates(&certs);
+                }
 
                 #[cfg(not(test))]
                 let roots = RootCertStore::empty();
@@ -505,12 +510,4 @@ impl GrpcConnector {
             Err(format!("Error: {:?}", sendresponse))
         }
     }
-}
-
-#[cfg(test)]
-fn add_test_cert_to_roots(roots: &mut RootCertStore) {
-    let fd = std::fs::File::open(crate::lightclient::test_server::TEST_PEMFILE_PATH).unwrap();
-    let mut buf = std::io::BufReader::new(&fd);
-    let certs = rustls_pemfile::certs(&mut buf).unwrap();
-    roots.add_parsable_certificates(&certs);
 }

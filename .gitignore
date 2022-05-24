@@ -3,5 +3,6 @@
 /procgov
 .DS_Store
 *.json.txt
-lib/test-data/*
-!lib/test-data/README
+lib/localhost.pem
+localhost.crt
+localhost.key
