@@ -11,17 +11,24 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use log::warn;
 
+use http_body::combinators::UnsyncBoxBody;
+use hyper::{client::HttpConnector, Uri};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use tokio_rustls::rustls::ClientConfig;
-use tonic::transport::ClientTlsConfig;
-use tonic::{
-    transport::{Channel, Error},
-    Request,
-};
+use tokio_rustls::rustls::{ClientConfig, RootCertStore};
+use tonic::Request;
+use tonic::Status;
+use tower::{util::BoxCloneService, ServiceExt};
+use zcash_primitives::consensus::{BlockHeight, BranchId, Parameters};
 use zcash_primitives::transaction::{Transaction, TxId};
+
+type UnderlyingService = BoxCloneService<
+    http::Request<UnsyncBoxBody<prost::bytes::Bytes, Status>>,
+    http::Response<hyper::Body>,
+    hyper::Error,
+>;
 
 #[derive(Clone)]
 pub struct GrpcConnector {
@@ -33,31 +40,86 @@ impl GrpcConnector {
         Self { uri }
     }
 
-    pub(crate) async fn get_client(&self) -> Result<CompactTxStreamerClient<Channel>, Error> {
-        let channel = if self.uri.scheme_str() == Some("http") {
-            //println!("http");
-            Channel::builder(self.uri.clone()).connect().await?
-        } else {
-            //println!("https");
-            let mut config = ClientConfig::new();
+    pub(crate) fn get_client(
+        &self,
+    ) -> impl std::future::Future<Output = Result<CompactTxStreamerClient<UnderlyingService>, Box<dyn std::error::Error>>>
+    {
+        let uri = Arc::new(self.uri.clone());
+        async move {
+            let mut http_connector = HttpConnector::new();
+            http_connector.enforce_http(false);
+            if uri.scheme_str() == Some("https") {
+                let mut roots = RootCertStore::empty();
+                roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|anchor_ref| {
+                    tokio_rustls::rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                        anchor_ref.subject,
+                        anchor_ref.spki,
+                        anchor_ref.name_constraints,
+                    )
+                }));
 
-            config.alpn_protocols.push(b"h2".to_vec());
+                #[cfg(test)]
+                add_test_cert_to_roots(&mut roots);
 
-            config
-                .root_store
-                .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+                let tls = ClientConfig::builder()
+                    .with_safe_defaults()
+                    .with_root_certificates(roots)
+                    .with_no_client_auth();
+                let connector = tower::ServiceBuilder::new()
+                    .layer_fn(move |s| {
+                        let tls = tls.clone();
 
-            #[cfg(test)]
-            add_tls_test_config(&mut config).await;
+                        hyper_rustls::HttpsConnectorBuilder::new()
+                            .with_tls_config(tls)
+                            .https_or_http()
+                            .enable_http2()
+                            .wrap_connector(s)
+                    })
+                    .service(http_connector);
+                let client = Box::new(hyper::Client::builder().build(connector));
+                let uri = uri.clone();
+                let svc = tower::ServiceBuilder::new()
+                    //Here, we take all the pieces of our uri, and add in the path from the Requests's uri
+                    .map_request(move |mut req: http::Request<tonic::body::BoxBody>| {
+                        let uri = Uri::builder()
+                            .scheme(uri.scheme().unwrap().clone())
+                            .authority(uri.authority().unwrap().clone())
+                            //here. The Request's uri contains the path to the GRPC sever and
+                            //the method being called
+                            .path_and_query(req.uri().path_and_query().unwrap().clone())
+                            .build()
+                            .unwrap();
 
-            let tls = ClientTlsConfig::new()
-                .rustls_client_config(config)
-                .domain_name(self.uri.host().unwrap());
+                        *req.uri_mut() = uri;
+                        req
+                    })
+                    .service(client);
 
-            Channel::builder(self.uri.clone()).tls_config(tls)?.connect().await?
-        };
+                Ok(CompactTxStreamerClient::new(svc.boxed_clone()))
+            } else {
+                let connector = tower::ServiceBuilder::new().service(http_connector);
+                let client = Box::new(hyper::Client::builder().http2_only(true).build(connector));
+                let uri = uri.clone();
+                let svc = tower::ServiceBuilder::new()
+                    //Here, we take all the pieces of our uri, and add in the path from the Requests's uri
+                    .map_request(move |mut req: http::Request<tonic::body::BoxBody>| {
+                        let uri = Uri::builder()
+                            .scheme(uri.scheme().unwrap().clone())
+                            .authority(uri.authority().unwrap().clone())
+                            //here. The Request's uri contains the path to the GRPC sever and
+                            //the method being called
+                            .path_and_query(req.uri().path_and_query().unwrap().clone())
+                            .build()
+                            .unwrap();
 
-        Ok(CompactTxStreamerClient::new(channel))
+                        *req.uri_mut() = uri;
+                        req
+                    })
+                    .service(client);
+
+                Ok(CompactTxStreamerClient::new(svc.boxed_clone()))
+            }
+        }
     }
 
     pub async fn start_saplingtree_fetcher(
@@ -66,22 +128,22 @@ impl GrpcConnector {
         JoinHandle<()>,
         UnboundedSender<(u64, oneshot::Sender<Result<TreeState, String>>)>,
     ) {
-        let (tx, mut rx) = unbounded_channel::<(u64, oneshot::Sender<Result<TreeState, String>>)>();
+        let (transmitter, mut receiver) = unbounded_channel::<(u64, oneshot::Sender<Result<TreeState, String>>)>();
         let uri = self.uri.clone();
 
         let h = tokio::spawn(async move {
             let uri = uri.clone();
-            while let Some((height, result_tx)) = rx.recv().await {
-                result_tx
+            while let Some((height, result_transmitter)) = receiver.recv().await {
+                result_transmitter
                     .send(Self::get_sapling_tree(uri.clone(), height).await)
                     .unwrap()
             }
         });
 
-        (h, tx)
+        (h, transmitter)
     }
 
-    pub async fn start_taddr_txn_fetcher(
+    pub async fn start_taddr_transaction_fetcher(
         &self,
     ) -> (
         JoinHandle<()>,
@@ -90,7 +152,7 @@ impl GrpcConnector {
             oneshot::Sender<Vec<UnboundedReceiver<Result<RawTransaction, String>>>>,
         )>,
     ) {
-        let (tx, rx) = oneshot::channel::<(
+        let (transmitter, receiver) = oneshot::channel::<(
             (Vec<String>, u64, u64),
             oneshot::Sender<Vec<UnboundedReceiver<Result<RawTransaction, String>>>>,
         )>();
@@ -98,49 +160,52 @@ impl GrpcConnector {
 
         let h = tokio::spawn(async move {
             let uri = uri.clone();
-            if let Ok(((taddrs, start_height, end_height), result_tx)) = rx.await {
-                let mut tx_rs = vec![];
-                let mut tx_rs_workers = vec![];
+            if let Ok(((taddrs, start_height, end_height), result_transmitter)) = receiver.await {
+                let mut transaction_receivers = vec![];
+                let mut transaction_receivers_workers = vec![];
 
                 // Create a stream for every t-addr
                 for taddr in taddrs {
-                    let (tx_s, tx_r) = unbounded_channel();
-                    tx_rs.push(tx_r);
-                    tx_rs_workers.push(tokio::spawn(Self::get_taddr_txns(
+                    let (transaction_s, transaction_receiver) = unbounded_channel();
+                    transaction_receivers.push(transaction_receiver);
+                    transaction_receivers_workers.push(tokio::spawn(Self::get_taddr_transactions(
                         uri.clone(),
                         taddr,
                         start_height,
                         end_height,
-                        tx_s,
+                        transaction_s,
                     )));
                 }
 
                 // Dispatch a set of recievers
-                result_tx.send(tx_rs).unwrap();
+                result_transmitter.send(transaction_receivers).unwrap();
 
                 // // Wait for all the t-addr transactions to be fetched from LightwalletD and sent to the h1 handle.
-                join_all(tx_rs_workers).await;
+                join_all(transaction_receivers_workers).await;
             }
         });
 
-        (h, tx)
+        (h, transmitter)
     }
 
-    pub async fn start_fulltx_fetcher(
+    pub async fn start_full_transaction_fetcher(
         &self,
+        network: &'static (impl Parameters + Sync),
     ) -> (
         JoinHandle<()>,
         UnboundedSender<(TxId, oneshot::Sender<Result<Transaction, String>>)>,
     ) {
-        let (tx, mut rx) = unbounded_channel::<(TxId, oneshot::Sender<Result<Transaction, String>>)>();
+        let (transmitter, mut receiver) = unbounded_channel::<(TxId, oneshot::Sender<Result<Transaction, String>>)>();
         let uri = self.uri.clone();
 
         let h = tokio::spawn(async move {
             let mut workers = FuturesUnordered::new();
-            while let Some((txid, result_tx)) = rx.recv().await {
+            while let Some((transaction_id, result_transmitter)) = receiver.recv().await {
                 let uri = uri.clone();
                 workers.push(tokio::spawn(async move {
-                    result_tx.send(Self::get_full_tx(uri.clone(), &txid).await).unwrap()
+                    result_transmitter
+                        .send(Self::get_full_transaction(uri.clone(), &transaction_id, network).await)
+                        .unwrap()
                 }));
 
                 // Do only 16 API calls in parallel, otherwise it might overflow OS's limit of
@@ -153,14 +218,14 @@ impl GrpcConnector {
             }
         });
 
-        (h, tx)
+        (h, transmitter)
     }
 
     pub async fn get_block_range(
         &self,
         start_height: u64,
         end_height: u64,
-        receivers: &[UnboundedSender<CompactBlock>; 2],
+        senders: &[UnboundedSender<CompactBlock>; 2],
     ) -> Result<(), String> {
         let mut client = self.get_client().await.map_err(|e| format!("{}", e))?;
 
@@ -185,39 +250,51 @@ impl GrpcConnector {
             .into_inner();
 
         while let Some(block) = response.message().await.map_err(|e| format!("{}", e))? {
-            receivers[0].send(block.clone()).map_err(|e| format!("{}", e))?;
-            receivers[1].send(block).map_err(|e| format!("{}", e))?;
+            senders[0].send(block.clone()).map_err(|e| format!("{}", e))?;
+            senders[1].send(block).map_err(|e| format!("{}", e))?;
         }
 
         Ok(())
     }
 
-    async fn get_full_tx(uri: http::Uri, txid: &TxId) -> Result<Transaction, String> {
+    async fn get_full_transaction(
+        uri: http::Uri,
+        transaction_id: &TxId,
+        network: &impl Parameters,
+    ) -> Result<Transaction, String> {
         let client = Arc::new(GrpcConnector::new(uri));
         let request = Request::new(TxFilter {
             block: None,
             index: 0,
-            hash: txid.0.to_vec(),
+            hash: transaction_id.as_ref().to_vec(),
         });
 
-        // log::info!("Full fetching {}", txid);
+        // log::info!("Full fetching {}", transaction_id);
 
         let mut client = client
             .get_client()
             .await
             .map_err(|e| format!("Error getting client: {:?}", e))?;
 
-        let response = client.get_transaction(request).await.map_err(|e| format!("{}", e))?;
+        let response = client
+            .get_transaction(request)
+            .await
+            .map_err(|e| format!("{}", e))?
+            .into_inner();
 
-        Transaction::read(&response.into_inner().data[..]).map_err(|e| format!("Error parsing Transaction: {}", e))
+        Transaction::read(
+            &response.data[..],
+            BranchId::for_height(network, BlockHeight::from_u32(response.height as u32)),
+        )
+        .map_err(|e| format!("Error parsing Transaction: {}", e))
     }
 
-    async fn get_taddr_txns(
+    async fn get_taddr_transactions(
         uri: http::Uri,
         taddr: String,
         start_height: u64,
         end_height: u64,
-        txns_sender: UnboundedSender<Result<RawTransaction, String>>,
+        transactions_sender: UnboundedSender<Result<RawTransaction, String>>,
     ) -> Result<(), String> {
         let client = Arc::new(GrpcConnector::new(uri));
 
@@ -263,8 +340,8 @@ impl GrpcConnector {
 
         let mut response = maybe_response.into_inner();
 
-        while let Some(tx) = response.message().await.map_err(|e| format!("{}", e))? {
-            txns_sender.send(Ok(tx)).unwrap();
+        while let Some(transaction) = response.message().await.map_err(|e| format!("{}", e))? {
+            transactions_sender.send(Ok(transaction)).unwrap();
         }
 
         Ok(())
@@ -287,7 +364,10 @@ impl GrpcConnector {
         Ok(response.into_inner())
     }
 
-    pub async fn monitor_mempool(uri: http::Uri, mempool_tx: UnboundedSender<RawTransaction>) -> Result<(), String> {
+    pub async fn monitor_mempool(
+        uri: http::Uri,
+        mempool_transmitter: UnboundedSender<RawTransaction>,
+    ) -> Result<(), String> {
         let client = Arc::new(GrpcConnector::new(uri));
 
         let mut client = client
@@ -302,8 +382,8 @@ impl GrpcConnector {
             .await
             .map_err(|e| format!("{}", e))?
             .into_inner();
-        while let Some(rtx) = response.message().await.map_err(|e| format!("{}", e))? {
-            mempool_tx.send(rtx).map_err(|e| format!("{}", e))?;
+        while let Some(r_transmitter) = response.message().await.map_err(|e| format!("{}", e))? {
+            mempool_transmitter.send(r_transmitter).map_err(|e| format!("{}", e))?;
         }
 
         Ok(())
@@ -346,7 +426,7 @@ impl GrpcConnector {
 
     pub async fn get_historical_zec_prices(
         uri: http::Uri,
-        txids: Vec<(TxId, u64)>,
+        transaction_ids: Vec<(TxId, u64)>,
         currency: String,
     ) -> Result<HashMap<TxId, Option<f64>>, String> {
         let client = Arc::new(GrpcConnector::new(uri));
@@ -358,7 +438,7 @@ impl GrpcConnector {
         let mut prices = HashMap::new();
         let mut error_count: u32 = 0;
 
-        for (txid, ts) in txids {
+        for (transaction_id, ts) in transaction_ids {
             if error_count < 10 {
                 let r = Request::new(PriceRequest {
                     timestamp: ts,
@@ -367,7 +447,7 @@ impl GrpcConnector {
                 match client.get_zec_price(r).await {
                     Ok(response) => {
                         let price_response = response.into_inner();
-                        prices.insert(txid, Some(price_response.price));
+                        prices.insert(transaction_id, Some(price_response.price));
                     }
                     Err(e) => {
                         // If the server doesn't support this, bail
@@ -379,12 +459,12 @@ impl GrpcConnector {
                         // and will be retried anyway
                         warn!("Ignoring grpc error: {}", e);
                         error_count += 1;
-                        prices.insert(txid, None);
+                        prices.insert(transaction_id, None);
                     }
                 }
             } else {
                 // If there are too many errors, don't bother querying the server, just return none
-                prices.insert(txid, None);
+                prices.insert(transaction_id, None);
             }
         }
 
@@ -409,7 +489,7 @@ impl GrpcConnector {
         Ok(response.into_inner())
     }
 
-    pub async fn send_transaction(uri: http::Uri, tx_bytes: Box<[u8]>) -> Result<String, String> {
+    pub async fn send_transaction(uri: http::Uri, transaction_bytes: Box<[u8]>) -> Result<String, String> {
         let client = Arc::new(GrpcConnector::new(uri));
         let mut client = client
             .get_client()
@@ -417,7 +497,7 @@ impl GrpcConnector {
             .map_err(|e| format!("Error getting client: {:?}", e))?;
 
         let request = Request::new(RawTransaction {
-            data: tx_bytes.to_vec(),
+            data: transaction_bytes.to_vec(),
             height: 0,
         });
 
@@ -428,12 +508,12 @@ impl GrpcConnector {
 
         let sendresponse = response.into_inner();
         if sendresponse.error_code == 0 {
-            let mut txid = sendresponse.error_message;
-            if txid.starts_with("\"") && txid.ends_with("\"") {
-                txid = txid[1..txid.len() - 1].to_string();
+            let mut transaction_id = sendresponse.error_message;
+            if transaction_id.starts_with("\"") && transaction_id.ends_with("\"") {
+                transaction_id = transaction_id[1..transaction_id.len() - 1].to_string();
             }
 
-            Ok(txid)
+            Ok(transaction_id)
         } else {
             Err(format!("Error: {:?}", sendresponse))
         }
@@ -441,25 +521,9 @@ impl GrpcConnector {
 }
 
 #[cfg(test)]
-async fn add_tls_test_config(config: &mut ClientConfig) {
-    use std::{fs::File, io::BufReader};
-    let file = "localhost.pem";
-    let mut reader = BufReader::new(File::open(file).unwrap());
-    config.root_store.add_pem_file(&mut reader).unwrap();
-    config
-        .set_single_client_cert(
-            vec![tokio_rustls::rustls::Certificate(
-                rustls_pemfile::certs(&mut BufReader::new(File::open(file).unwrap()))
-                    .unwrap()
-                    .pop()
-                    .unwrap(),
-            )],
-            tokio_rustls::rustls::PrivateKey(
-                rustls_pemfile::pkcs8_private_keys(&mut BufReader::new(File::open(file).unwrap()))
-                    .unwrap()
-                    .pop()
-                    .expect("empty vec of private keys??"),
-            ),
-        )
-        .unwrap();
+fn add_test_cert_to_roots(roots: &mut RootCertStore) {
+    let fd = std::fs::File::open(crate::lightclient::test_server::TEST_PEMFILE_PATH).unwrap();
+    let mut buf = std::io::BufReader::new(&fd);
+    let certs = rustls_pemfile::certs(&mut buf).unwrap();
+    roots.add_parsable_certificates(&certs);
 }

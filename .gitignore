@@ -1,8 +1,10 @@
-/target
+target
+lib/target
+cli/target
 /testdata
 /procgov
 .DS_Store
 *.json.txt
-lib/localhost.pem
-localhost.crt
-localhost.key
+lib/test-data/*
+!lib/test-data/README
+!lib/test-data/openssl_cfg
