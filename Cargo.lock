@@ -1440,18 +1440,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nix"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f17df307904acd05aa8e32e97bb20f2a0df1728bbc2d771ae8f9a90463441e9"
-dependencies = [
- "bitflags",
- "cfg-if",
- "libc",
- "memoffset",
-]
-
-[[package]]
 name = "nom"
 version = "7.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2215,7 +2203,7 @@ dependencies = [
  "libc",
  "log",
  "memchr",
- "nix 0.23.1",
+ "nix",
  "radix_trie",
  "scopeguard",
  "smallvec",
@@ -3553,7 +3541,6 @@ dependencies = [
  "json",
  "log",
  "log4rs",
- "nix 0.24.1",
  "rustyline",
  "shellwords",
  "tiny-bip39",
