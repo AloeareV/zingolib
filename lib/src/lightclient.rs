@@ -350,14 +350,6 @@ impl LightClient {
         l
     }
 
-    pub fn init_logging(&self) -> io::Result<()> {
-        // Configure logging first.
-        let log_config = self.config.get_log_config()?;
-        log4rs::init_config(log_config).map_err(|e| std::io::Error::new(ErrorKind::Other, e))?;
-
-        Ok(())
-    }
-
     // Export private keys
     pub async fn do_export(&self, addr: Option<String>) -> Result<JsonValue, &str> {
         if !self.wallet.is_unlocked_for_spending().await {

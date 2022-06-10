@@ -3571,7 +3571,6 @@ dependencies = [
  "jubjub",
  "lazy_static",
  "log",
- "log4rs",
  "pairing",
  "portpicker",
  "prost",

@@ -1,19 +1,9 @@
 use std::{
-    io::{self, Error, ErrorKind},
+    io::{self, ErrorKind},
     path::{Path, PathBuf},
 };
 
-use log::{error, info, LevelFilter};
-use log4rs::{
-    append::rolling_file::{
-        policy::compound::{roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy},
-        RollingFileAppender,
-    },
-    config::{Appender, Root},
-    encode::pattern::PatternEncoder,
-    filter::threshold::ThresholdFilter,
-    Config,
-};
+use log::{error, info};
 use tokio::runtime::Runtime;
 use zcash_primitives::{
     consensus::{BlockHeight, NetworkUpgrade, Parameters, MAIN_NETWORK, TEST_NETWORK},
@@ -192,33 +182,6 @@ impl LightClientConfig {
 
     pub fn set_data_dir(&mut self, dir_str: String) {
         self.data_dir = Some(dir_str);
-    }
-
-    /// Build the Logging config
-    pub fn get_log_config(&self) -> io::Result<Config> {
-        let window_size = 3; // log0, log1, log2
-        let fixed_window_roller = FixedWindowRoller::builder()
-            .build("zecwallet-light-wallet-log{}", window_size)
-            .unwrap();
-        let size_limit = 5 * 1024 * 1024; // 5MB as max log file size to roll
-        let size_trigger = SizeTrigger::new(size_limit);
-        let compound_policy = CompoundPolicy::new(Box::new(size_trigger), Box::new(fixed_window_roller));
-
-        Config::builder()
-            .appender(
-                Appender::builder()
-                    .filter(Box::new(ThresholdFilter::new(LevelFilter::Info)))
-                    .build(
-                        "logfile",
-                        Box::new(
-                            RollingFileAppender::builder()
-                                .encoder(Box::new(PatternEncoder::new("{d} {l}::{m}{n}")))
-                                .build(self.get_log_path(), Box::new(compound_policy))?,
-                        ),
-                    ),
-            )
-            .build(Root::builder().appender("logfile").build(LevelFilter::Debug))
-            .map_err(|e| Error::new(ErrorKind::Other, format!("{}", e)))
     }
 
     pub fn get_zcash_data_path(&self) -> Box<Path> {

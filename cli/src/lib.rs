@@ -99,9 +99,6 @@ pub fn startup(
         }
     };
 
-    // Initialize logging
-    lightclient.init_logging()?;
-
     // Print startup Messages
     info!(""); // Blank line
     info!("Starting Zecwallet-CLI");
