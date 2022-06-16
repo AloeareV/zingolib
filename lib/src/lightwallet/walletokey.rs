@@ -1,6 +1,6 @@
 use orchard::keys::{Diversifier, FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey};
 use zcash_address::unified::{Address, Encoding, Receiver, Typecode};
-// A struct that holds orchard private keys or view keys
+// A struct that holds orchard private, spending and viewing, keys.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WalletOKey {
     pub(super) key: WalletOKeyInner,
