@@ -6,16 +6,14 @@ use secp256k1::SecretKey;
 use sha2::Sha256;
 use sodiumoxide::crypto::secretbox;
 use zcash_encoding::{Optional, Vector};
+use zingoconfig::ZingoConfig;
 
-use crate::{
-    lightclient::lightclient_config::LightClientConfig,
-    wallet::{
-        keys::{
-            extended_transparent::{ExtendedPrivKey, KeyIndex},
-            FromBase58Check, ToBase58Check,
-        },
-        utils,
+use crate::wallet::{
+    keys::{
+        extended_transparent::{ExtendedPrivKey, KeyIndex},
+        FromBase58Check, ToBase58Check,
     },
+    utils,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -41,7 +39,7 @@ pub struct WalletTKey {
 
 impl WalletTKey {
     pub fn get_taddr_from_bip39seed(
-        config: &LightClientConfig,
+        config: &ZingoConfig,
         bip39_seed: &[u8],
         pos: u32,
     ) -> secp256k1::SecretKey {
@@ -87,7 +85,7 @@ impl WalletTKey {
         }
     }
 
-    pub fn from_sk_string(config: &LightClientConfig, sks: String) -> io::Result<Self> {
+    pub fn from_sk_string(config: &ZingoConfig, sks: String) -> io::Result<Self> {
         let (_v, mut bytes) = sks.as_str().from_base58check()?;
         let suffix = bytes.split_off(32);
 
@@ -114,7 +112,7 @@ impl WalletTKey {
         })
     }
 
-    pub fn new_hdkey(config: &LightClientConfig, hdkey_num: u32, bip39_seed: &[u8]) -> Self {
+    pub fn new_hdkey(config: &ZingoConfig, hdkey_num: u32, bip39_seed: &[u8]) -> Self {
         let pos = hdkey_num;
 
         let sk = Self::get_taddr_from_bip39seed(&config, bip39_seed, pos);
@@ -132,7 +130,7 @@ impl WalletTKey {
     }
 
     // Return the wallet string representation of a secret key
-    pub fn sk_as_string(&self, config: &LightClientConfig) -> io::Result<String> {
+    pub fn sk_as_string(&self, config: &ZingoConfig) -> io::Result<String> {
         if self.key.is_none() {
             return Err(io::Error::new(ErrorKind::NotFound, "Wallet locked"));
         }
@@ -260,7 +258,7 @@ impl WalletTKey {
 
     pub fn unlock(
         &mut self,
-        config: &LightClientConfig,
+        config: &ZingoConfig,
         bip39_seed: &[u8],
         key: &secretbox::Key,
     ) -> io::Result<()> {
@@ -356,13 +354,13 @@ mod test {
     use rand::{rngs::OsRng, Rng};
     use secp256k1::SecretKey;
 
-    use crate::lightclient::lightclient_config::LightClientConfig;
+    use zingoconfig::ZingoConfig;
 
     use super::WalletTKey;
 
     #[test]
     fn tkey_encode_decode() {
-        let config = LightClientConfig::create_unconnected(zingoconfig::Network::FakeMainnet, None);
+        let config = ZingoConfig::create_unconnected(zingoconfig::Network::FakeMainnet, None);
 
         for _i in 0..10 {
             let mut b = [0u8; 32];

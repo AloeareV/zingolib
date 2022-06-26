@@ -23,9 +23,9 @@ use zcash_primitives::{
     sapling::PaymentAddress,
     zip32::{ChildIndex, ExtendedFullViewingKey, ExtendedSpendingKey},
 };
-use zingoconfig::{Network, GAP_RULE_UNUSED_ADDRESSES};
+use zingoconfig::{Network, ZingoConfig, GAP_RULE_UNUSED_ADDRESSES};
 
-use crate::{lightclient::lightclient_config::LightClientConfig, wallet::utils};
+use crate::wallet::utils;
 
 use self::{
     orchard::{WalletOKey, WalletOKeyInner},
@@ -108,7 +108,7 @@ impl FromBase58Check for str {
 // assume that this is already gone through a RwLock, so we don't lock any of the individual fields.
 pub struct Keys {
     // TODO: This struct is duplicated with LightWallet and LightClient
-    config: LightClientConfig,
+    config: ZingoConfig,
 
     // Is the wallet encrypted? If it is, then when writing to disk, the seed is always encrypted
     // and the individual spending keys are not written
@@ -160,7 +160,7 @@ impl Keys {
 
     #[cfg(test)]
     pub fn new_empty() -> Self {
-        let config = LightClientConfig::create_unconnected(Network::FakeMainnet, None);
+        let config = ZingoConfig::create_unconnected(Network::FakeMainnet, None);
         Self {
             config,
             encrypted: false,
@@ -175,7 +175,7 @@ impl Keys {
     }
 
     pub fn new(
-        config: &LightClientConfig,
+        config: &ZingoConfig,
         seed_phrase: Option<String>,
         num_zaddrs: u32,
     ) -> Result<Self, String> {
@@ -227,7 +227,7 @@ impl Keys {
     pub fn read_old<R: Read>(
         version: u64,
         mut reader: R,
-        config: &LightClientConfig,
+        config: &ZingoConfig,
     ) -> io::Result<Self> {
         let encrypted = if version >= 4 {
             reader.read_u8()? > 0
@@ -370,7 +370,7 @@ impl Keys {
         })
     }
 
-    pub fn read<R: Read>(mut reader: R, config: &LightClientConfig) -> io::Result<Self> {
+    pub fn read<R: Read>(mut reader: R, config: &ZingoConfig) -> io::Result<Self> {
         let version = reader.read_u64::<LittleEndian>()?;
         if version > Self::serialized_version() {
             let e = format!(
@@ -455,7 +455,7 @@ impl Keys {
         Ok(())
     }
 
-    pub fn config(&self) -> LightClientConfig {
+    pub fn config(&self) -> ZingoConfig {
         self.config.clone()
     }
 
@@ -964,7 +964,7 @@ impl Keys {
     }
 
     pub fn get_zaddr_from_bip39seed(
-        config: &LightClientConfig,
+        config: &ZingoConfig,
         bip39_seed: &[u8],
         pos: u32,
     ) -> (ExtendedSpendingKey, ExtendedFullViewingKey, PaymentAddress) {
@@ -984,7 +984,7 @@ impl Keys {
         (extsk, extfvk, address)
     }
 
-    pub fn is_shielded_address(addr: &String, config: &LightClientConfig) -> bool {
+    pub fn is_shielded_address(addr: &String, config: &ZingoConfig) -> bool {
         match address::RecipientAddress::decode(&config.chain, addr) {
             Some(address::RecipientAddress::Shielded(_)) => true,
             _ => false,

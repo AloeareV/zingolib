@@ -150,7 +150,7 @@ impl Parameters for Network {
 }
 
 #[derive(Clone, Debug)]
-pub struct LightClientConfig {
+pub struct ZingoConfig {
     pub server: http::Uri,
     pub chain: Network,
     pub anchor_offset: [u32; 5],
@@ -158,10 +158,10 @@ pub struct LightClientConfig {
     pub data_dir: Option<String>,
 }
 
-impl LightClientConfig {
+impl ZingoConfig {
     // Create an unconnected (to any server) config to test for local wallet etc...
-    pub fn create_unconnected(chain: Network, dir: Option<String>) -> LightClientConfig {
-        LightClientConfig {
+    pub fn create_unconnected(chain: Network, dir: Option<String>) -> ZingoConfig {
+        ZingoConfig {
             server: http::Uri::default(),
             chain,
             monitor_mempool: false,
