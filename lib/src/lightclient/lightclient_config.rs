@@ -20,17 +20,7 @@ use tokio::runtime::Runtime;
 use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{grpc_connector::GrpcConnector, lightclient::checkpoints};
-use zingoconfig::{Network, DEFAULT_SERVER};
-
-pub const WALLET_NAME: &str = "zingo-wallet.dat";
-pub const LOGFILE_NAME: &str = "zingo-wallet.debug.log";
-pub const ANCHOR_OFFSET: [u32; 5] = [4, 0, 0, 0, 0];
-pub const GAP_RULE_UNUSED_ADDRESSES: usize = if cfg!(any(target_os = "ios", target_os = "android"))
-{
-    0
-} else {
-    5
-};
+use zingoconfig::{Network, ANCHOR_OFFSET, DEFAULT_SERVER, LOGFILE_NAME, WALLET_NAME};
 
 #[derive(Clone, Debug)]
 pub struct LightClientConfig {
