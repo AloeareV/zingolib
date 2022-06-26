@@ -17,10 +17,7 @@ use log4rs::{
     Config,
 };
 use tokio::runtime::Runtime;
-use zcash_primitives::{
-    consensus::{BlockHeight, NetworkUpgrade, Parameters, MAIN_NETWORK, TEST_NETWORK},
-    constants,
-};
+use zcash_primitives::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{grpc_connector::GrpcConnector, lightclient::checkpoints};
 use zingoconfig::{Network, DEFAULT_SERVER};
