@@ -3411,6 +3411,10 @@ dependencies = [
 name = "zingoconfig"
 version = "0.1.0"
 dependencies = [
+ "dirs",
+ "http",
+ "log",
+ "log4rs",
  "zcash_address",
  "zcash_primitives",
 ]
