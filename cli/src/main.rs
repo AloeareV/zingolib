@@ -260,7 +260,7 @@ pub fn main() {
         unflagged_lwd_log.push_str(lwd_logs.to_str().expect("error making lwd_datadir"));
         unflagged_lwd_log.push_str("lwd.log");
 
-        let _lwd_command = Command::new(lwd_bin)
+        Command::new(lwd_bin)
             .args([
                 "--no-tls-very-insecure",
                 "--zcash-conf-path",
