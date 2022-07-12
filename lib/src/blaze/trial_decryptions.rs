@@ -234,7 +234,7 @@ impl TrialDecryptions {
                         }
                     };
                     for (i, ivk) in orchard_ivks.iter().cloned().enumerate() {
-                        if let Some((note, _recipient)) =
+                        if let Some((note, recipient)) =
                             zcash_note_encryption::try_compact_note_decryption(
                                 &OrchardDomain::for_nullifier(action.nullifier()),
                                 &ivk,
@@ -243,21 +243,21 @@ impl TrialDecryptions {
                         {
                             let keys = keys.clone();
                             let bsync_data = bsync_data.clone();
-                            let _wallet_transactions = wallet_transactions.clone();
-                            let _detected_transaction_id_sender =
+                            let wallet_transactions = wallet_transactions.clone();
+                            let detected_transaction_id_sender =
                                 detected_transaction_id_sender.clone();
-                            let _timestamp = cb.time as u64;
+                            let timestamp = cb.time as u64;
                             let compact_transaction = compact_transaction.clone();
 
                             workers.push(tokio::spawn(async move {
                                 let keys = keys.read().await;
                                 let fvk = OrchardFvk::try_from(&keys.okeys[i].key);
-                                let _have_orchard_spending_key =
+                                let have_orchard_spending_key =
                                     keys.have_orchard_spending_key(&ivk);
                                 let uri = bsync_data.read().await.uri().clone();
 
                                 // Get the witness for the note
-                                let _witness = bsync_data
+                                let witness = bsync_data
                                     .read()
                                     .await
                                     .block_data
@@ -269,12 +269,43 @@ impl TrialDecryptions {
                                     )
                                     .await?;
 
-                                let _transaction_id = WalletTx::new_txid(&compact_transaction.hash);
-                                let _nullifier = fvk.ok().map(|fvk| note.nullifier(&fvk));
+                                let transaction_id = WalletTx::new_txid(&compact_transaction.hash);
 
-                                Ok(())
+                                if let Ok(ref fvk) = &fvk {
+                                    let nullifier = note.nullifier(fvk);
+                                    wallet_transactions.write().await.add_new_orchard_note(
+                                        transaction_id.clone(),
+                                        height,
+                                        false,
+                                        timestamp,
+                                        note,
+                                        recipient,
+                                        &fvk,
+                                        have_orchard_spending_key,
+                                        witness,
+                                    );
+
+                                    info!("Trial decrypt Detected txid {}", &transaction_id);
+
+                                    detected_transaction_id_sender
+                                        .send((
+                                            transaction_id,
+                                            WalletNullifier::Orchard(nullifier),
+                                            height,
+                                            Some(action_num as u32),
+                                        ))
+                                        .unwrap();
+                                } else {
+                                    eprintln!(
+                                        "Transaction decryption without fvks not yet supported"
+                                    );
+                                }
+
+                                Ok::<_, String>(())
                             }));
-                            //Todo: Send decrypted orchard notes to where they need to go
+
+                            // No need to try the other ivks if we found one
+                            break;
                         }
                     }
                 }
