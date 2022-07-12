@@ -235,7 +235,7 @@ pub struct SaplingNoteData {
 }
 
 pub struct OrchardNoteData {
-    pub(super) fvk: orchard::keys::FullViewingKey,
+    pub(super) _fvk: orchard::keys::FullViewingKey,
 
     pub diversifier: OrchardDiversifier,
     pub note: OrchardNote,
