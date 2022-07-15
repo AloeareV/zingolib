@@ -3685,6 +3685,7 @@ dependencies = [
  "lazy_static",
  "log",
  "log4rs",
+ "nonempty",
  "orchard",
  "pairing",
  "portpicker",
