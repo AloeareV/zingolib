@@ -17,6 +17,7 @@ use orchard::{
     tree::MerkleHashOrchard,
     Action, Address as OrchardAddress,
 };
+use subtle::CtOption;
 use zcash_address::unified::{self, Encoding as _, Receiver};
 use zcash_client_backend::encoding::encode_payment_address;
 use zcash_note_encryption::{Domain, ShieldedOutput, ENC_CIPHERTEXT_SIZE};
@@ -139,18 +140,21 @@ impl FromBytes<32> for OrchardNullifier {
     }
 }
 
-pub(crate) trait FromCommitment {
-    fn from_commitment(from: &[u8; 32]) -> Self;
+pub(crate) trait FromCommitment
+where
+    Self: Sized,
+{
+    fn from_commitment(from: &[u8; 32]) -> CtOption<Self>;
 }
 
 impl FromCommitment for SaplingNode {
-    fn from_commitment(from: &[u8; 32]) -> Self {
-        Self::new(*from)
+    fn from_commitment(from: &[u8; 32]) -> CtOption<Self> {
+        CtOption::new(Self::new(*from), subtle::Choice::from(1))
     }
 }
 impl FromCommitment for MerkleHashOrchard {
-    fn from_commitment(from: &[u8; 32]) -> Self {
-        Self::from_bytes(from).unwrap()
+    fn from_commitment(from: &[u8; 32]) -> CtOption<Self> {
+        Self::from_bytes(from)
     }
 }
 
@@ -195,7 +199,7 @@ impl Recipient for OrchardAddress {
 
     fn encode(&self, chain: Network) -> String {
         unified::Address::try_from_items(vec![Receiver::Orchard(self.to_raw_address_bytes())])
-            .unwrap()
+            .expect("Could not create UA from orchard address")
             .encode(&chain.address_network().unwrap())
     }
 }
@@ -300,12 +304,15 @@ pub(crate) trait NoteData: Sized {
         is_change: bool,
         have_spending_key: bool,
     ) -> Self;
+    fn fvk(&self) -> &Self::Fvk;
+    fn diversifier(&self) -> &Self::Diversifier;
     fn memo_mut(&mut self) -> &mut Option<Memo>;
     fn note(&self) -> &Self::Note;
     fn nullifier(&self) -> Self::Nullifier;
     fn value(note: &Self::Note) -> u64;
     fn witnesses(&mut self) -> &mut WitnessCache<Self::Node>;
     fn wallet_transaction_notes_mut(wallet_transaction: &mut WalletTx) -> &mut Vec<Self>;
+    fn wallet_transaction_notes(wallet_transaction: &WalletTx) -> &Vec<Self>;
 }
 
 impl NoteData for SaplingNoteData {
@@ -341,6 +348,14 @@ impl NoteData for SaplingNoteData {
         }
     }
 
+    fn fvk(&self) -> &Self::Fvk {
+        &self.extfvk
+    }
+
+    fn diversifier(&self) -> &Self::Diversifier {
+        &self.diversifier
+    }
+
     fn memo_mut(&mut self) -> &mut Option<Memo> {
         &mut self.memo
     }
@@ -357,12 +372,83 @@ impl NoteData for SaplingNoteData {
         note.value
     }
 
+    fn witnesses(&mut self) -> &mut WitnessCache<Self::Node> {
+        &mut self.witnesses
+    }
+
     fn wallet_transaction_notes_mut(wallet_transaction: &mut WalletTx) -> &mut Vec<Self> {
         &mut wallet_transaction.sapling_notes
     }
 
+    fn wallet_transaction_notes(wallet_transaction: &WalletTx) -> &Vec<Self> {
+        &wallet_transaction.sapling_notes
+    }
+}
+
+impl NoteData for OrchardNoteData {
+    type Fvk = OrchardFullViewingKey;
+    type Diversifier = OrchardDiversifier;
+    type Note = OrchardNote;
+    type Node = MerkleHashOrchard;
+    type Nullifier = OrchardNullifier;
+
+    fn from_parts(
+        fvk: Self::Fvk,
+        diversifier: Self::Diversifier,
+        note: Self::Note,
+        witnesses: WitnessCache<Self::Node>,
+        nullifier: Self::Nullifier,
+        spent: Option<(TxId, u32)>,
+        unconfirmed_spent: Option<(TxId, u32)>,
+        memo: Option<Memo>,
+        is_change: bool,
+        have_spending_key: bool,
+    ) -> Self {
+        Self {
+            fvk,
+            diversifier,
+            note,
+            witnesses,
+            nullifier,
+            spent,
+            unconfirmed_spent,
+            memo,
+            is_change,
+            have_spending_key,
+        }
+    }
+
+    fn fvk(&self) -> &Self::Fvk {
+        &self.fvk
+    }
+    fn diversifier(&self) -> &Self::Diversifier {
+        &self.diversifier
+    }
+    fn memo_mut(&mut self) -> &mut Option<Memo> {
+        &mut self.memo
+    }
+    fn note(&self) -> &Self::Note {
+        &self.note
+    }
+
+    fn nullifier(&self) -> Self::Nullifier {
+        self.nullifier
+    }
+
+    fn value(note: &Self::Note) -> u64 {
+        note.value().inner()
+    }
+
     fn witnesses(&mut self) -> &mut WitnessCache<Self::Node> {
         &mut self.witnesses
+    }
+
+    fn wallet_transaction_notes_mut(wallet_transaction: &mut WalletTx) -> &mut Vec<Self> {
+        &mut wallet_transaction.orchard_notes
+    }
+
+    fn wallet_transaction_notes(wallet_transaction: &WalletTx) -> &Vec<Self> {
+        &wallet_transaction.orchard_notes
     }
 }
 
@@ -470,62 +556,6 @@ impl WalletKey for OrchardKey {
     }
 }
 
-impl NoteData for OrchardNoteData {
-    type Fvk = OrchardFullViewingKey;
-    type Diversifier = OrchardDiversifier;
-    type Note = OrchardNote;
-    type Node = MerkleHashOrchard;
-    type Nullifier = OrchardNullifier;
-
-    fn from_parts(
-        fvk: Self::Fvk,
-        diversifier: Self::Diversifier,
-        note: Self::Note,
-        witnesses: WitnessCache<Self::Node>,
-        nullifier: Self::Nullifier,
-        spent: Option<(TxId, u32)>,
-        unconfirmed_spent: Option<(TxId, u32)>,
-        memo: Option<Memo>,
-        is_change: bool,
-        have_spending_key: bool,
-    ) -> Self {
-        Self {
-            fvk,
-            diversifier,
-            note,
-            witnesses,
-            nullifier,
-            spent,
-            unconfirmed_spent,
-            memo,
-            is_change,
-            have_spending_key,
-        }
-    }
-
-    fn memo_mut(&mut self) -> &mut Option<Memo> {
-        &mut self.memo
-    }
-    fn note(&self) -> &Self::Note {
-        &self.note
-    }
-    fn nullifier(&self) -> Self::Nullifier {
-        self.nullifier
-    }
-
-    fn value(note: &Self::Note) -> u64 {
-        note.value().inner()
-    }
-
-    fn wallet_transaction_notes_mut(wallet_transaction: &mut WalletTx) -> &mut Vec<Self> {
-        &mut wallet_transaction.orchard_notes
-    }
-
-    fn witnesses(&mut self) -> &mut WitnessCache<Self::Node> {
-        &mut self.witnesses
-    }
-}
-
 pub(crate) trait DomainWalletExt<P: Parameters>: Domain
 where
     Self: Sized,
@@ -576,5 +606,31 @@ impl<P: Parameters> DomainWalletExt<P> for OrchardDomain {
 
     fn wallet_notes_mut(transaction: &mut WalletTx) -> &mut Vec<Self::WalletNote> {
         &mut transaction.orchard_notes
+    }
+}
+
+trait Diversifiable {
+    type Diversifier;
+    type Address;
+    fn diversified_address(&self, div: Self::Diversifier) -> Option<Self::Address>;
+}
+
+impl Diversifiable for SaplingExtendedFullViewingKey {
+    type Diversifier = SaplingDiversifier;
+
+    type Address = SaplingAddress;
+
+    fn diversified_address(&self, div: Self::Diversifier) -> Option<Self::Address> {
+        self.fvk.vk.to_payment_address(div)
+    }
+}
+
+impl Diversifiable for OrchardFullViewingKey {
+    type Diversifier = OrchardDiversifier;
+
+    type Address = OrchardAddress;
+
+    fn diversified_address(&self, div: Self::Diversifier) -> Option<Self::Address> {
+        Some(self.address(div, orchard::keys::Scope::External))
     }
 }
