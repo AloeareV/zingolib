@@ -72,7 +72,7 @@ fn config_zcashd_for_launch(
     let mut command = std::process::Command::new(zcashd_bin);
     command
         .args([
-            "--printtoconsole",
+            "-printtoconsole",
             format!(
                 "--conf={}",
                 zcashd_config.to_str().expect("Unexpected string!")
@@ -85,7 +85,7 @@ fn config_zcashd_for_launch(
             .as_str(),
             // Currently zcashd will not write to debug.log with the following flag
             // "-debuglogfile=.../zingolib/regtest/logs/debug.log",
-            // debug=1 will at least print to stdout
+            // debug=1 will print all debugging info (to stdout due to printtoconsole)
             "-debug=1",
         ])
         .stdout(std::process::Stdio::piped())
@@ -95,7 +95,7 @@ fn config_zcashd_for_launch(
         &command.get_args().into_iter().collect::<Vec<&OsStr>>()[0]
             .to_str()
             .unwrap(),
-        &"--printtoconsole"
+        &"-printtoconsole"
     );
     assert!(&command.get_args().into_iter().collect::<Vec<&OsStr>>()[1]
         .to_str()
@@ -138,7 +138,7 @@ pub(crate) fn launch() {
     let lightwalletd_logs = logs.join("lightwalletd");
     let lightwalletd_stdout_log = lightwalletd_logs.join("stdout.log");
     let lightwalletd_stderr_log = lightwalletd_logs.join("stderr.log");
-    let lightwalletd_datadir = data_dir.join("lightwalletd");
+    let lightwalletd_datadir = data_dir.join("zcashd");
 
     assert!(&zcashd_config
         .to_str()
