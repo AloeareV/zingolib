@@ -483,20 +483,6 @@ async fn scan_bundle<D>(
     D::Note: Clone + PartialEq,
     D::OutgoingViewingKey: std::fmt::Debug,
     D::Recipient: zingo_traits::Recipient,
-    for<'a> &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<D, Network>>::Spends:
-        IntoIterator<
-            Item = &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<
-                D,
-                Network,
-            >>::Spend,
-        >,
-    for<'a> &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<D, Network>>::Outputs:
-        IntoIterator<
-            Item = &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<
-                D,
-                Network,
-            >>::Output,
-        >,
     D::Memo: zingo_traits::ToBytes<512>,
 {
     // Check if any of the nullifiers spent in this transaction are ours. We only need this for unconfirmed transactions,

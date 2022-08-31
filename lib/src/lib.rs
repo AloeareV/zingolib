@@ -1,3 +1,5 @@
+#![feature(generic_associated_types)]
+
 #[macro_use]
 extern crate rust_embed;
 mod test_framework;

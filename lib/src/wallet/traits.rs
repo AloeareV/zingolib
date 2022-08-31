@@ -309,28 +309,34 @@ where
     type Spend: Spend;
     /// A value store that is completely emptied by transfer of its contents to another output.
     type Output: ShieldedOutputExt<P, D>;
-    type Spends: IntoIterator<Item = Self::Spend>;
-    type Outputs: IntoIterator<Item = Self::Output>;
+    type Spends<'a>: IntoIterator<Item = &'a Self::Spend>
+    where
+        Self: 'a,
+        Self::Spend: 'a;
+    type Outputs<'a>: IntoIterator<Item = &'a Self::Output>
+    where
+        Self: 'a,
+        Self::Output: 'a;
     /// An extractive process that returns domain specific information from a transaction.
     fn from_transaction(transaction: &Transaction) -> Option<&Self>;
-    fn outputs(&self) -> &Self::Outputs;
-    fn spends(&self) -> &Self::Spends;
+    fn outputs(&self) -> Self::Outputs<'_>;
+    fn spends(&self) -> Self::Spends<'_>;
 }
 
 impl<P: Parameters> Bundle<SaplingDomain<P>, P> for SaplingBundle<SaplingAuthorized> {
     type Spend = SpendDescription<SaplingAuthorized>;
     type Output = OutputDescription<GrothProofBytes>;
-    type Spends = Vec<Self::Spend>;
-    type Outputs = Vec<Self::Output>;
+    type Spends<'a> = &'a Vec<Self::Spend>;
+    type Outputs<'a> = &'a Vec<Self::Output>;
     fn from_transaction(transaction: &Transaction) -> Option<&Self> {
         transaction.sapling_bundle()
     }
 
-    fn outputs(&self) -> &Self::Outputs {
+    fn outputs(&self) -> Self::Outputs<'_> {
         &self.shielded_outputs
     }
 
-    fn spends(&self) -> &Self::Spends {
+    fn spends(&self) -> Self::Spends<'_> {
         &self.shielded_spends
     }
 }
@@ -338,19 +344,19 @@ impl<P: Parameters> Bundle<SaplingDomain<P>, P> for SaplingBundle<SaplingAuthori
 impl<P: Parameters> Bundle<OrchardDomain, P> for OrchardBundle<OrchardAuthorized, Amount> {
     type Spend = Action<Signature<SpendAuth>>;
     type Output = Action<Signature<SpendAuth>>;
-    type Spends = NonEmpty<Self::Spend>;
-    type Outputs = NonEmpty<Self::Output>;
+    type Spends<'a> = &'a NonEmpty<Self::Spend>;
+    type Outputs<'a> = &'a NonEmpty<Self::Output>;
 
     fn from_transaction(transaction: &Transaction) -> Option<&Self> {
         transaction.orchard_bundle()
     }
 
-    fn outputs(&self) -> &Self::Outputs {
+    fn outputs(&self) -> Self::Outputs<'_> {
         //! In orchard each action contains an output and a spend.
         self.actions()
     }
 
-    fn spends(&self) -> &Self::Spends {
+    fn spends(&self) -> Self::Spends<'_> {
         //! In orchard each action contains an output and a spend.
         self.actions()
     }
