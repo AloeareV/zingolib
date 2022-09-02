@@ -39,25 +39,28 @@ use zcash_primitives::{
 use super::syncdata::BlazeSyncData;
 use zingoconfig::{Network, ZingoConfig};
 
-pub struct FetchFullTxns {
+pub struct BundleScanner {
     config: ZingoConfig,
     keys: Arc<RwLock<Keys>>,
     transaction_metadata_set: Arc<RwLock<TransactionMetadataSet>>,
 }
 
+struct FetchFullTxns {
+    bundlescanner: BundleScanner,
+}
 impl FetchFullTxns {
     pub fn new(
-        config: &ZingoConfig,
+        config: ZingoConfig,
         keys: Arc<RwLock<Keys>>,
         transaction_metadata_set: Arc<RwLock<TransactionMetadataSet>>,
     ) -> Self {
-        Self {
-            config: config.clone(),
+        let bundlescanner = BundleScanner {
+            config,
             keys,
             transaction_metadata_set,
-        }
+        };
+        Self { bundlescanner }
     }
-
     pub async fn start(
         &self,
         fulltx_fetcher: UnboundedSender<(TxId, oneshot::Sender<Result<Transaction, String>>)>,
