@@ -429,18 +429,19 @@ impl FetchFullTxns {
         is_outgoing_transaction: &mut bool,
         outgoing_metadatas: &mut Vec<OutgoingTxMetadata>,
     ) {
-        Scanner::scan_bundle::<SaplingDomain<Network>>(
-            config,
-            transaction,
-            height,
-            unconfirmed,
-            block_time,
-            keys,
-            transaction_metadata_set,
-            is_outgoing_transaction,
-            outgoing_metadatas,
-        )
-        .await
+        (Scanner {})
+            .scan_bundle::<SaplingDomain<Network>>(
+                config,
+                transaction,
+                height,
+                unconfirmed,
+                block_time,
+                keys,
+                transaction_metadata_set,
+                is_outgoing_transaction,
+                outgoing_metadatas,
+            )
+            .await
     }
     async fn scan_orchard_bundle(
         config: &ZingoConfig,
@@ -453,18 +454,19 @@ impl FetchFullTxns {
         is_outgoing_transaction: &mut bool,
         outgoing_metadatas: &mut Vec<OutgoingTxMetadata>,
     ) {
-        Scanner::scan_bundle::<OrchardDomain>(
-            config,
-            transaction,
-            height,
-            unconfirmed,
-            block_time,
-            keys,
-            transaction_metadata_set,
-            is_outgoing_transaction,
-            outgoing_metadatas,
-        )
-        .await;
+        (Scanner {})
+            .scan_bundle::<OrchardDomain>(
+                config,
+                transaction,
+                height,
+                unconfirmed,
+                block_time,
+                keys,
+                transaction_metadata_set,
+                is_outgoing_transaction,
+                outgoing_metadatas,
+            )
+            .await;
     }
 }
 
@@ -472,6 +474,7 @@ struct Scanner {}
 
 impl Scanner {
     async fn scan_bundle<D>(
+        &self,
         config: &ZingoConfig,
         transaction: &Transaction,
         transaction_block_height: BlockHeight,
