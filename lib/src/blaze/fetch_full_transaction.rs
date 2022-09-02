@@ -429,7 +429,7 @@ impl FetchFullTxns {
         is_outgoing_transaction: &mut bool,
         outgoing_metadatas: &mut Vec<OutgoingTxMetadata>,
     ) {
-        scan_bundle::<SaplingDomain<Network>>(
+        Scanner::scan_bundle::<SaplingDomain<Network>>(
             config,
             transaction,
             height,
@@ -453,7 +453,7 @@ impl FetchFullTxns {
         is_outgoing_transaction: &mut bool,
         outgoing_metadatas: &mut Vec<OutgoingTxMetadata>,
     ) {
-        scan_bundle::<OrchardDomain>(
+        Scanner::scan_bundle::<OrchardDomain>(
             config,
             transaction,
             height,
@@ -468,56 +468,58 @@ impl FetchFullTxns {
     }
 }
 
-/// Core
-async fn scan_bundle<D>(
-    config: &ZingoConfig,
-    transaction: &Transaction,
-    transaction_block_height: BlockHeight,
-    unconfirmed: bool, // TODO: This is true when called by wallet.send_to_address_internal, investigate.
-    block_time: u32,
-    keys: &Arc<RwLock<Keys>>,
-    transaction_metadata_set: &Arc<RwLock<TransactionMetadataSet>>, // WHATNAME?
-    is_outgoing_transaction: &mut bool,
-    outgoing_metadatas: &mut Vec<OutgoingTxMetadata>,
-) where
-    D: zingo_traits::DomainWalletExt<Network>,
-    D::Note: Clone + PartialEq,
-    D::OutgoingViewingKey: std::fmt::Debug,
-    D::Recipient: zingo_traits::Recipient,
-    for<'a> &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<D, Network>>::Spends:
-        IntoIterator<
-            Item = &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<
-                D,
-                Network,
-            >>::Spend,
-        >,
-    for<'a> &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<D, Network>>::Outputs:
-        IntoIterator<
-            Item = &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<
-                D,
-                Network,
-            >>::Output,
-        >,
-    D::Memo: zingo_traits::ToBytes<512>,
-{
-    type FnGenBundle<I> = <I as DomainWalletExt<Network>>::Bundle;
-    // Check if any of the nullifiers generated in this transaction are ours. We only need this for unconfirmed transactions,
-    // because for transactions in the block, we will check the nullifiers from the blockdata
-    if unconfirmed {
-        let unspent_nullifiers =
+struct Scanner {}
+
+impl Scanner {
+    async fn scan_bundle<D>(
+        config: &ZingoConfig,
+        transaction: &Transaction,
+        transaction_block_height: BlockHeight,
+        unconfirmed: bool, // TODO: This is true when called by wallet.send_to_address_internal, investigate.
+        block_time: u32,
+        keys: &Arc<RwLock<Keys>>,
+        transaction_metadata_set: &Arc<RwLock<TransactionMetadataSet>>, // WHATNAME?
+        is_outgoing_transaction: &mut bool,
+        outgoing_metadatas: &mut Vec<OutgoingTxMetadata>,
+    ) where
+        D: zingo_traits::DomainWalletExt<Network>,
+        D::Note: Clone + PartialEq,
+        D::OutgoingViewingKey: std::fmt::Debug,
+        D::Recipient: zingo_traits::Recipient,
+        for<'a> &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<D, Network>>::Spends:
+            IntoIterator<
+                Item = &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<
+                    D,
+                    Network,
+                >>::Spend,
+            >,
+        for<'a> &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<D, Network>>::Outputs:
+            IntoIterator<
+                Item = &'a <<D as DomainWalletExt<Network>>::Bundle as zingo_traits::Bundle<
+                    D,
+                    Network,
+                >>::Output,
+            >,
+        D::Memo: zingo_traits::ToBytes<512>,
+    {
+        type FnGenBundle<I> = <I as DomainWalletExt<Network>>::Bundle;
+        // Check if any of the nullifiers generated in this transaction are ours. We only need this for unconfirmed transactions,
+        // because for transactions in the block, we will check the nullifiers from the blockdata
+        if unconfirmed {
+            let unspent_nullifiers =
             <<D as DomainWalletExt<Network>>::WalletNote as zingo_traits::NoteAndMetadata>::Nullifier::get_nullifiers_of_unspent_notes_from_transaction_set(
                 &*transaction_metadata_set.read().await,
             );
-        for output in
-            <FnGenBundle<D> as zingo_traits::Bundle<D, Network>>::from_transaction(transaction)
-                .into_iter()
-                .flat_map(|bundle| bundle.spends().into_iter())
-        {
-            if let Some((nf, value, transaction_id)) = unspent_nullifiers
-                .iter()
-                .find(|(nf, _, _)| nf == output.nullifier())
+            for output in
+                <FnGenBundle<D> as zingo_traits::Bundle<D, Network>>::from_transaction(transaction)
+                    .into_iter()
+                    .flat_map(|bundle| bundle.spends().into_iter())
             {
-                transaction_metadata_set.write().await.add_new_spent(
+                if let Some((nf, value, transaction_id)) = unspent_nullifiers
+                    .iter()
+                    .find(|(nf, _, _)| nf == output.nullifier())
+                {
+                    transaction_metadata_set.write().await.add_new_spent(
                     transaction.txid(),
                     transaction_block_height,
                     unconfirmed,
@@ -528,117 +530,124 @@ async fn scan_bundle<D>(
                     *value,
                     *transaction_id,
                 );
+                }
             }
         }
-    }
-    // The preceding updates the wallet_transactions with presumptive new "spent" nullifiers.  I continue to find the notion
-    // of a "spent" nullifier to be problematic.
-    // Issues:
-    //     1. There's more than one way to be "spent".
-    //     2. It's possible for a "nullifier" to be in the wallet's spent list, but never in the global ledger.
-    //     <https://github.com/zingolabs/zingolib/issues/65>
-    let all_wallet_keys = keys.read().await;
-    let domain_specific_keys = D::Key::get_keys(&*all_wallet_keys).clone();
-    let domain_tagged_outputs =
-        <FnGenBundle<D> as zingo_traits::Bundle<D, Network>>::from_transaction(transaction)
-            .into_iter()
-            .flat_map(|bundle| bundle.outputs().into_iter())
-            .map(|output| {
-                (
-                    output.domain(transaction_block_height, config.chain),
-                    output.clone(),
-                )
-            })
-            .collect::<Vec<_>>();
+        // The preceding updates the wallet_transactions with presumptive new "spent" nullifiers.  I continue to find the notion
+        // of a "spent" nullifier to be problematic.
+        // Issues:
+        //     1. There's more than one way to be "spent".
+        //     2. It's possible for a "nullifier" to be in the wallet's spent list, but never in the global ledger.
+        //     <https://github.com/zingolabs/zingolib/issues/65>
+        let all_wallet_keys = keys.read().await;
+        let domain_specific_keys = D::Key::get_keys(&*all_wallet_keys).clone();
+        let domain_tagged_outputs =
+            <FnGenBundle<D> as zingo_traits::Bundle<D, Network>>::from_transaction(transaction)
+                .into_iter()
+                .flat_map(|bundle| bundle.outputs().into_iter())
+                .map(|output| {
+                    (
+                        output.domain(transaction_block_height, config.chain),
+                        output.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
 
-    for key in domain_specific_keys.iter() {
-        if let Some(ivk) = key.ivk() {
-            let mut decrypt_attempts =
-                zcash_note_encryption::batch::try_note_decryption(&[ivk], &domain_tagged_outputs)
-                    .into_iter();
-            while let Some(decrypt_attempt) = decrypt_attempts.next() {
-                let (note, to, memo_bytes) = match decrypt_attempt {
-                    Some(plaintext) => plaintext,
-                    _ => continue,
-                };
-                let memo_bytes = MemoBytes::from_bytes(&memo_bytes.to_bytes()).unwrap();
-                if unconfirmed {
+        for key in domain_specific_keys.iter() {
+            if let Some(ivk) = key.ivk() {
+                let mut decrypt_attempts = zcash_note_encryption::batch::try_note_decryption(
+                    &[ivk],
+                    &domain_tagged_outputs,
+                )
+                .into_iter();
+                while let Some(decrypt_attempt) = decrypt_attempts.next() {
+                    let (note, to, memo_bytes) = match decrypt_attempt {
+                        Some(plaintext) => plaintext,
+                        _ => continue,
+                    };
+                    let memo_bytes = MemoBytes::from_bytes(&memo_bytes.to_bytes()).unwrap();
+                    if unconfirmed {
+                        transaction_metadata_set
+                            .write()
+                            .await
+                            .add_pending_note::<D>(
+                                transaction.txid(),
+                                transaction_block_height,
+                                block_time as u64,
+                                note.clone(),
+                                to,
+                                &match &key.fvk() {
+                                    Some(k) => k.clone(),
+                                    None => todo!(
+                            "Handle this case more carefully. How should we handle missing fvks?"
+                        ),
+                                },
+                            );
+                    }
+                    let memo = memo_bytes
+                        .clone()
+                        .try_into()
+                        .unwrap_or(Memo::Future(memo_bytes));
                     transaction_metadata_set
                         .write()
                         .await
-                        .add_pending_note::<D>(
-                            transaction.txid(),
-                            transaction_block_height,
-                            block_time as u64,
-                            note.clone(),
-                            to,
-                            &match &key.fvk() {
-                                Some(k) => k.clone(),
-                                None => todo!(
-                            "Handle this case more carefully. How should we handle missing fvks?"
-                        ),
-                            },
+                        .add_memo_to_note_metadata::<D::WalletNote>(
+                            &transaction.txid(),
+                            note,
+                            memo,
                         );
                 }
-                let memo = memo_bytes
-                    .clone()
-                    .try_into()
-                    .unwrap_or(Memo::Future(memo_bytes));
-                transaction_metadata_set
-                    .write()
-                    .await
-                    .add_memo_to_note_metadata::<D::WalletNote>(&transaction.txid(), note, memo);
             }
         }
-    }
-    for (_domain, output) in domain_tagged_outputs {
-        outgoing_metadatas.extend(
-            domain_specific_keys
-                .iter()
-                .filter_map(|key| {
-                    match try_output_recovery_with_ovk::<
-                        D,
-                        <FnGenBundle<D> as zingo_traits::Bundle<D, Network>>::Output,
-                    >(
-                        &output.domain(transaction_block_height, config.chain),
-                        &key.ovk().unwrap(),
-                        &output,
-                        &output.value_commitment(),
-                        &output.out_ciphertext(),
-                    ) {
-                        Some((note, payment_address, memo_bytes)) => {
-                            // Mark this transaction as an outgoing transaction, so we can grab all outgoing metadata
-                            *is_outgoing_transaction = true;
-                            let address = payment_address.b32encode_for_network(&config.chain);
+        for (_domain, output) in domain_tagged_outputs {
+            outgoing_metadatas.extend(
+                domain_specific_keys
+                    .iter()
+                    .filter_map(|key| {
+                        match try_output_recovery_with_ovk::<
+                            D,
+                            <FnGenBundle<D> as zingo_traits::Bundle<D, Network>>::Output,
+                        >(
+                            &output.domain(transaction_block_height, config.chain),
+                            &key.ovk().unwrap(),
+                            &output,
+                            &output.value_commitment(),
+                            &output.out_ciphertext(),
+                        ) {
+                            Some((note, payment_address, memo_bytes)) => {
+                                // Mark this transaction as an outgoing transaction, so we can grab all outgoing metadata
+                                *is_outgoing_transaction = true;
+                                let address = payment_address.b32encode_for_network(&config.chain);
 
-                            // Check if this is change, and if it also doesn't have a memo, don't add
-                            // to the outgoing metadata.
-                            // If this is change (i.e., funds sent to ourself) AND has a memo, then
-                            // presumably the user is writing a memo to themself, so we will add it to
-                            // the outgoing metadata, even though it might be confusing in the UI, but hopefully
-                            // the user can make sense of it.
-                            match Memo::from_bytes(&memo_bytes.to_bytes()) {
-                                Err(_) => None,
-                                Ok(memo) => {
-                                    if D::Key::addresses_from_keys(&all_wallet_keys)
-                                        .contains(&address)
-                                        && memo == Memo::Empty
-                                    {
-                                        None
-                                    } else {
-                                        Some(OutgoingTxMetadata {
-                                            address,
-                                            value: D::WalletNote::value(&note),
-                                            memo,
-                                        })
+                                // Check if this is change, and if it also doesn't have a memo, don't add
+                                // to the outgoing metadata.
+                                // If this is change (i.e., funds sent to ourself) AND has a memo, then
+                                // presumably the user is writing a memo to themself, so we will add it to
+                                // the outgoing metadata, even though it might be confusing in the UI, but hopefully
+                                // the user can make sense of it.
+                                match Memo::from_bytes(&memo_bytes.to_bytes()) {
+                                    Err(_) => None,
+                                    Ok(memo) => {
+                                        if D::Key::addresses_from_keys(&all_wallet_keys)
+                                            .contains(&address)
+                                            && memo == Memo::Empty
+                                        {
+                                            None
+                                        } else {
+                                            Some(OutgoingTxMetadata {
+                                                address,
+                                                value: D::WalletNote::value(&note),
+                                                memo,
+                                            })
+                                        }
                                     }
                                 }
                             }
+                            None => None,
                         }
-                        None => None,
-                    }
-                })
-                .collect::<Vec<_>>(),
-        );
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
     }
 }
