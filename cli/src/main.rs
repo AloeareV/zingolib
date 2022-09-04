@@ -74,7 +74,6 @@ pub fn main() {
         maybe_data_dir,
         !nosync,
         command.is_none(),
-        regtest_mode_enabled,
     );
     let (command_transmitter, resp_receiver) = match startup_chan {
         Ok(c) => c,

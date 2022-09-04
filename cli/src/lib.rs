@@ -98,7 +98,6 @@ pub fn startup(
     birthday: u64,
     data_dir: Option<String>,
     first_sync: bool,
-    print_updates: bool,
     regtest: bool,
 ) -> std::io::Result<(Sender<(String, Vec<String>)>, Receiver<String>)> {
     // Try to get the configuration
@@ -106,12 +105,12 @@ pub fn startup(
 
     // Diagnostic check for regtest flag and network in config, panic if mis-matched.
     if regtest && config.chain == Network::Regtest {
-        println!("regtest detected and network set correctly!");
+        info!("regtest detected and network set correctly!");
     } else if regtest && config.chain != Network::Regtest {
-        println!("Regtest flag detected, but unexpected network set! Exiting.");
+        eprintln!("Regtest flag detected, but unexpected network set! Exiting.");
         panic!("Regtest Network Problem");
     } else if config.chain == Network::Regtest {
-        println!("WARNING! regtest network in use but no regtest flag recognized!");
+        panic!("WARNING! regtest network in use but no regtest flag recognized!");
     }
 
     let lightclient = match seed {
@@ -122,7 +121,7 @@ pub fn startup(
             if config.wallet_exists() {
                 Arc::new(LightClient::read_from_disk(&config)?)
             } else {
-                println!("Creating a new wallet");
+                info!("Creating a new wallet");
                 // Create a wallet with height - 100, to protect against reorgs
                 Arc::new(LightClient::new(
                     &config,
@@ -140,19 +139,15 @@ pub fn startup(
     info!("Starting Zingo-CLI");
     info!("Light Client config {:?}", config);
 
-    if print_updates {
-        println!(
-            "Lightclient connecting to {}",
-            config.server.read().unwrap()
-        );
-    }
+    info!(
+        "Lightclient connecting to {}",
+        config.server.read().unwrap()
+    );
 
     // At startup, run a sync.
     if first_sync {
         let update = commands::do_user_command("sync", &vec![], lightclient.as_ref());
-        if print_updates {
-            println!("{}", update);
-        }
+        info!("{}", update);
     }
 
     // Start the command loop
@@ -168,7 +163,7 @@ pub fn start_interactive(
     // `()` can be used when no completer is required
     let mut rl = rustyline::Editor::<()>::new();
 
-    println!("Ready!");
+    info!("Ready!");
 
     let send_command = |cmd: String, args: Vec<String>| -> String {
         command_transmitter.send((cmd.clone(), args)).unwrap();
