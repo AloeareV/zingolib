@@ -6,6 +6,7 @@ use log::{error, info};
 use zingoconfig::{Network, ZingoConfig};
 use zingolib::{commands, create_on_data_dir, lightclient::LightClient};
 
+pub mod regtest;
 pub mod version;
 
 #[macro_export]
