@@ -1,8 +1,7 @@
 mod regtest;
 use log::error;
 use zingo_cli::{
-    attempt_recover_seed, configure_clapapp, report_permission_error, start_interactive, startup,
-    version::VERSION,
+    configure_clapapp, report_permission_error, start_interactive, startup, version::VERSION,
 };
 use zingoconfig::ZingoConfig;
 
@@ -12,12 +11,6 @@ pub fn main() {
     let fresh_app = App::new("Zingo CLI");
     let configured_app = configure_clapapp!(fresh_app);
     let matches = configured_app.get_matches();
-
-    if matches.is_present("recover") {
-        // Create a Light Client Config in an attempt to recover the file.
-        attempt_recover_seed(matches.value_of("password").map(|s| s.to_string()));
-        return;
-    }
 
     let command = matches.value_of("COMMAND");
     let params = matches
