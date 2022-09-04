@@ -1,9 +1,10 @@
+use crate::version::VERSION;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use log::{error, info};
 
-use zingoconfig::{Network, ZingoConfig};
+use zingoconfig::Network;
 use zingolib::{commands, create_on_data_dir, lightclient::LightClient};
 
 pub mod version;
@@ -67,6 +68,11 @@ macro_rules! configure_clapapp {
                 .required(false)
                 .multiple(true))
     };
+}
+
+use clap::{App, Arg};
+pub fn checked_app_config<'a, 'b>(fresh_app: App<'a, 'b>) -> App<'a, 'b> {
+    configure_clapapp!(fresh_app)
 }
 
 /// This function is only tested against Linux.

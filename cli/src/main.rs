@@ -1,15 +1,13 @@
 mod regtest;
 use log::error;
-use zingo_cli::{
-    configure_clapapp, report_permission_error, start_interactive, startup, version::VERSION,
-};
+use zingo_cli::{checked_app_config, report_permission_error, start_interactive, startup};
 use zingoconfig::ZingoConfig;
 
 pub fn main() {
     // Get command line arguments
-    use clap::{App, Arg};
+    use clap::App;
     let fresh_app = App::new("Zingo CLI");
-    let configured_app = configure_clapapp!(fresh_app);
+    let configured_app = checked_app_config(fresh_app);
     let matches = configured_app.get_matches();
 
     let command = matches.value_of("COMMAND");
