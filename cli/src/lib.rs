@@ -1,9 +1,9 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use log::{error, info};
 
-use zingoconfig::{Network, ZingoConfig};
+use zingoconfig::Network;
 use zingolib::{commands, create_on_data_dir, lightclient::LightClient};
 
 pub mod regtest;
