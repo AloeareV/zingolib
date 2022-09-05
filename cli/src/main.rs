@@ -1,80 +1,11 @@
 mod regtest;
 use log::error;
-use zingo_cli::{
-    configure_clapapp, report_permission_error, start_interactive, startup, version::VERSION,
-};
-use zingoconfig::ZingoConfig;
+use zingo_cli::{report_permission_error, start_interactive, startup};
 
 pub fn main() {
-    // Get command line arguments
-    use clap::{App, Arg};
-    let fresh_app = App::new("Zingo CLI");
-    let configured_app = configure_clapapp!(fresh_app);
-    let matches = configured_app.get_matches();
-
-    let command = matches.value_of("COMMAND");
-    let params = matches
-        .values_of("PARAMS")
-        .map(|v| v.collect())
-        .or(Some(vec![]))
-        .unwrap();
-
-    let maybe_server = matches.value_of("server").map(|s| s.to_string());
-
-    let maybe_data_dir = matches.value_of("data-dir").map(|s| s.to_string());
-
-    let seed = matches.value_of("seed").map(|s| s.to_string());
-    let maybe_birthday = matches.value_of("birthday");
-
-    if seed.is_some() && maybe_birthday.is_none() {
-        eprintln!("ERROR!");
-        eprintln!(
-            "Please specify the wallet birthday (eg. '--birthday 600000') to restore from seed."
-        );
-        eprintln!("This should be the block height where the wallet was created. If you don't remember the block height, you can pass '--birthday 0' to scan from the start of the blockchain.");
-        return;
-    }
-
-    let birthday = match maybe_birthday.unwrap_or("0").parse::<u64>() {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!(
-                "Couldn't parse birthday. This should be a block number. Error={}",
-                e
-            );
-            return;
-        }
-    };
-
-    let regtest_mode_enabled = matches.is_present("regtest");
-    let clean_regtest_data = !matches.is_present("no-clean");
-    let server = if regtest_mode_enabled {
-        regtest::launch(clean_regtest_data);
-        ZingoConfig::get_server_or_default(Some("http://127.0.0.1".to_string()))
-        // do the regtest
-    } else {
-        ZingoConfig::get_server_or_default(maybe_server)
-    };
-
-    // Test to make sure the server has all of scheme, host and port
-    if server.scheme_str().is_none() || server.host().is_none() || server.port().is_none() {
-        eprintln!(
-            "Please provide the --server parameter as [scheme]://[host]:[port].\nYou provided: {}",
-            server
-        );
-        return;
-    }
-
-    let nosync = matches.is_present("nosync");
-
-    let startup_chan = startup(
-        server,
-        seed,
-        birthday,
-        maybe_data_dir,
-        !nosync,
-        command.is_none(),
-    );
+    let argdispatcher = zingo_cli::ArgDispatcher::parse_args();
+    let server = argdispatcher.launch_and_validate_server();
+    let startup_chan = argdispatcher.startup(server);
     let (command_transmitter, resp_receiver) = match startup_chan {
         Ok(c) => c,
         Err(e) => {
