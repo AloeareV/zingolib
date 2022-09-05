@@ -1,3 +1,4 @@
+use std::io::Result;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
@@ -152,7 +153,7 @@ impl<'a> ArgDispatcher<'a> {
     pub fn startup(
         &self,
         server: http::Uri,
-    ) -> std::io::Result<(Sender<(String, Vec<String>)>, Receiver<String>)> {
+    ) -> Result<(Sender<(String, Vec<String>)>, Receiver<String>)> {
         // Try to get the configuration
         let (config, latest_block_height) =
             create_on_data_dir(server.clone(), self.maybe_data_dir.clone())?;
@@ -210,6 +211,21 @@ impl<'a> ArgDispatcher<'a> {
         // Start the command loop
         let (command_transmitter, resp_receiver) = command_loop(lightclient.clone());
 
+        Ok((command_transmitter, resp_receiver))
+    }
+
+    pub fn startup_and_check(
+        &self,
+        server: http::Uri,
+    ) -> Result<(Sender<(String, Vec<String>)>, Receiver<String>)> {
+        let startup_chan = self.startup(server);
+        let (command_transmitter, resp_receiver) = match startup_chan {
+            Ok(c) => c,
+            Err(e) => {
+                let emsg = format!("Error during startup:{}\nIf you repeatedly run into this issue, you might have to restore your wallet from your seed phrase.", e);
+                panic!("{}", emsg);
+            }
+        };
         Ok((command_transmitter, resp_receiver))
     }
 }
