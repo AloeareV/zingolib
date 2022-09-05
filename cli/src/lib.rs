@@ -228,6 +228,39 @@ impl<'a> ArgDispatcher<'a> {
         };
         Ok((command_transmitter, resp_receiver))
     }
+
+    pub fn start_interactive_or_dispatch_command(&self, server: http::Uri) {
+        if let Ok((command_transmitter, resp_receiver)) = self.startup_and_check(server) {
+            if self.command.is_none() {
+                start_interactive(command_transmitter, resp_receiver);
+            } else {
+                command_transmitter
+                    .send((
+                        self.command.unwrap().to_string(),
+                        self.params
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<String>>(),
+                    ))
+                    .unwrap();
+
+                match resp_receiver.recv() {
+                    Ok(s) => println!("{}", s),
+                    Err(e) => {
+                        let e = format!("Error executing command {}: {}", self.command.unwrap(), e);
+                        eprintln!("{}", e);
+                        error!("{}", e);
+                    }
+                }
+
+                // Save before exit
+                command_transmitter
+                    .send(("save".to_string(), vec![]))
+                    .unwrap();
+                resp_receiver.recv().unwrap();
+            }
+        }
+    }
 }
 /// This function is only tested against Linux.
 pub fn report_permission_error() {
