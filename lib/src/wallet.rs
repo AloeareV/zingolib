@@ -40,7 +40,7 @@ use zcash_primitives::{
 };
 
 use self::data::SpendableOrchardNote;
-use self::traits::{DomainWalletExt, NoteAndMetadata, SpendableNote};
+use self::traits::{DomainWalletExt, NoteAndMetadata, SpendableNote, TransactionOutput};
 use self::{
     data::{BlockData, OrchardNoteAndMetadata, SaplingNoteAndMetadata, Utxo, WalletZecPriceInfo},
     keys::{orchard::OrchardKey, Keys},

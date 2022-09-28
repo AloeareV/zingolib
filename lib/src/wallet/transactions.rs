@@ -32,7 +32,9 @@ use super::{
         ChannelNullifier, OrchardNoteAndMetadata, OutgoingTxMetadata, SaplingNoteAndMetadata,
         TransactionMetadata, Utxo, WitnessCache,
     },
-    traits::{DomainWalletExt, FromBytes, NoteAndMetadata, Nullifier, Recipient},
+    traits::{
+        DomainWalletExt, FromBytes, NoteAndMetadata, Nullifier, Recipient, TransactionOutput,
+    },
 };
 
 /// List of all transactions in a wallet.

@@ -4,7 +4,7 @@ use std::io::{self, Read, Write};
 use super::{
     data::{
         ChannelNullifier, OrchardNoteAndMetadata, SaplingNoteAndMetadata, SpendableOrchardNote,
-        SpendableSaplingNote, TransactionMetadata, WitnessCache,
+        SpendableSaplingNote, TransactionMetadata, Utxo, WitnessCache,
     },
     keys::{orchard::OrchardKey, sapling::SaplingKey, Keys},
     transactions::TransactionMetadataSet,
@@ -401,7 +401,100 @@ impl Nullifier for OrchardNullifier {
     }
 }
 
-pub trait NoteAndMetadata: Sized {
+pub trait TransactionOutput: Sized {
+    fn transaction_metadata_notes(wallet_transaction: &TransactionMetadata) -> &Vec<Self>;
+    fn transaction_metadata_notes_mut(
+        wallet_transaction: &mut TransactionMetadata,
+    ) -> &mut Vec<Self>;
+    fn matches(&self, other: &Self) -> bool;
+    fn unconfirmed_spent(&self) -> &Option<(TxId, u32)>;
+    fn unconfirmed_spent_mut(&mut self) -> &mut Option<(TxId, u32)>;
+    fn mark_unconfirmed_spent(
+        self,
+        created_at_txid: TxId,
+        metadata_set: &mut TransactionMetadataSet,
+        spent_at_height: BlockHeight,
+        spent_at_txid: TxId,
+    ) {
+        *Self::transaction_metadata_notes_mut(
+            metadata_set.current.get_mut(&created_at_txid).unwrap(),
+        )
+        .iter_mut()
+        .find(|output| self.matches(output))
+        .unwrap()
+        .unconfirmed_spent_mut() = Some((spent_at_txid, u32::from(spent_at_height)))
+    }
+}
+
+impl TransactionOutput for SaplingNoteAndMetadata {
+    fn transaction_metadata_notes(wallet_transaction: &TransactionMetadata) -> &Vec<Self> {
+        &wallet_transaction.sapling_notes
+    }
+    fn transaction_metadata_notes_mut(
+        wallet_transaction: &mut TransactionMetadata,
+    ) -> &mut Vec<Self> {
+        &mut wallet_transaction.sapling_notes
+    }
+    fn matches(&self, other: &Self) -> bool {
+        self.nullifier == other.nullifier
+    }
+
+    fn unconfirmed_spent(&self) -> &Option<(TxId, u32)> {
+        &self.unconfirmed_spent
+    }
+
+    fn unconfirmed_spent_mut(&mut self) -> &mut Option<(TxId, u32)> {
+        &mut self.unconfirmed_spent
+    }
+}
+
+impl TransactionOutput for OrchardNoteAndMetadata {
+    fn transaction_metadata_notes(wallet_transaction: &TransactionMetadata) -> &Vec<Self> {
+        &wallet_transaction.orchard_notes
+    }
+    fn transaction_metadata_notes_mut(
+        wallet_transaction: &mut TransactionMetadata,
+    ) -> &mut Vec<Self> {
+        &mut wallet_transaction.orchard_notes
+    }
+    fn matches(&self, other: &Self) -> bool {
+        self.nullifier == other.nullifier
+    }
+
+    fn unconfirmed_spent(&self) -> &Option<(TxId, u32)> {
+        &self.unconfirmed_spent
+    }
+
+    fn unconfirmed_spent_mut(&mut self) -> &mut Option<(TxId, u32)> {
+        &mut self.unconfirmed_spent
+    }
+}
+
+impl TransactionOutput for Utxo {
+    fn transaction_metadata_notes(wallet_transaction: &TransactionMetadata) -> &Vec<Self> {
+        &wallet_transaction.utxos
+    }
+
+    fn transaction_metadata_notes_mut(
+        wallet_transaction: &mut TransactionMetadata,
+    ) -> &mut Vec<Self> {
+        &mut wallet_transaction.utxos
+    }
+
+    fn matches(&self, other: &Self) -> bool {
+        self.txid == other.txid && self.output_index == other.output_index
+    }
+
+    fn unconfirmed_spent(&self) -> &Option<(TxId, u32)> {
+        &self.unconfirmed_spent
+    }
+
+    fn unconfirmed_spent_mut(&mut self) -> &mut Option<(TxId, u32)> {
+        &mut self.unconfirmed_spent
+    }
+}
+
+pub trait NoteAndMetadata: TransactionOutput {
     type Fvk: Clone + Diversifiable + ReadableWriteable<()> + Send;
     type Diversifier: Copy + FromBytes<11> + ToBytes<11>;
     type Note: PartialEq + ReadableWriteable<(Self::Fvk, Self::Diversifier)> + Clone;
@@ -445,15 +538,9 @@ pub trait NoteAndMetadata: Sized {
     fn value_from_note(note: &Self::Note) -> u64;
     fn spent(&self) -> &Option<(TxId, u32)>;
     fn spent_mut(&mut self) -> &mut Option<(TxId, u32)>;
-    fn unconfirmed_spent(&self) -> &Option<(TxId, u32)>;
-    fn unconfirmed_spent_mut(&mut self) -> &mut Option<(TxId, u32)>;
     fn witnesses(&self) -> &WitnessCache<Self::Node>;
     fn witnesses_mut(&mut self) -> &mut WitnessCache<Self::Node>;
     fn have_spending_key(&self) -> bool;
-    fn transaction_metadata_notes(wallet_transaction: &TransactionMetadata) -> &Vec<Self>;
-    fn transaction_metadata_notes_mut(
-        wallet_transaction: &mut TransactionMetadata,
-    ) -> &mut Vec<Self>;
     ///Convenience function
     fn value(&self) -> u64 {
         Self::value_from_note(self.note())
@@ -555,14 +642,6 @@ impl NoteAndMetadata for SaplingNoteAndMetadata {
         &mut self.spent
     }
 
-    fn unconfirmed_spent(&self) -> &Option<(TxId, u32)> {
-        &self.unconfirmed_spent
-    }
-
-    fn unconfirmed_spent_mut(&mut self) -> &mut Option<(TxId, u32)> {
-        &mut self.unconfirmed_spent
-    }
-
     fn witnesses(&self) -> &WitnessCache<Self::Node> {
         &self.witnesses
     }
@@ -573,16 +652,6 @@ impl NoteAndMetadata for SaplingNoteAndMetadata {
 
     fn have_spending_key(&self) -> bool {
         self.have_spending_key
-    }
-
-    fn transaction_metadata_notes(wallet_transaction: &TransactionMetadata) -> &Vec<Self> {
-        &wallet_transaction.sapling_notes
-    }
-
-    fn transaction_metadata_notes_mut(
-        wallet_transaction: &mut TransactionMetadata,
-    ) -> &mut Vec<Self> {
-        &mut wallet_transaction.sapling_notes
     }
 }
 
@@ -677,14 +746,6 @@ impl NoteAndMetadata for OrchardNoteAndMetadata {
         &mut self.spent
     }
 
-    fn unconfirmed_spent(&self) -> &Option<(TxId, u32)> {
-        &self.unconfirmed_spent
-    }
-
-    fn unconfirmed_spent_mut(&mut self) -> &mut Option<(TxId, u32)> {
-        &mut self.unconfirmed_spent
-    }
-
     fn witnesses(&self) -> &WitnessCache<Self::Node> {
         &self.witnesses
     }
@@ -695,16 +756,6 @@ impl NoteAndMetadata for OrchardNoteAndMetadata {
 
     fn have_spending_key(&self) -> bool {
         self.have_spending_key
-    }
-
-    fn transaction_metadata_notes(wallet_transaction: &TransactionMetadata) -> &Vec<Self> {
-        &wallet_transaction.orchard_notes
-    }
-
-    fn transaction_metadata_notes_mut(
-        wallet_transaction: &mut TransactionMetadata,
-    ) -> &mut Vec<Self> {
-        &mut wallet_transaction.orchard_notes
     }
 }
 
