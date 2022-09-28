@@ -1341,36 +1341,26 @@ impl LightWallet {
         D::Note: PartialEq + Clone,
         D::Recipient: traits::Recipient,
     {
-        let mut notes = vec![];
-        let mut value_selected = Amount::zero();
-        let mut candidates = candidates.into_iter();
-        loop {
-            if let Some(candidate_set) = candidates.next() {
-                notes = candidate_set
-                    .into_iter()
-                    .scan(Amount::zero(), |running_total, spendable| {
-                        if *running_total >= target_amount {
-                            None
-                        } else {
-                            *running_total +=
-                                Amount::from_u64(D::WalletNote::value_from_note(&spendable.note()))
-                                    .unwrap();
-                            Some(spendable)
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                value_selected = notes.iter().fold(Amount::zero(), |prev, sn| {
-                    (prev + Amount::from_u64(D::WalletNote::value_from_note(&sn.note())).unwrap())
-                        .unwrap()
-                });
-
+        let mut last_loop_notes = Vec::new();
+        let mut last_loop_value = Amount::zero();
+        for candidate_set in candidates {
+            let mut value_selected = Amount::zero();
+            let mut notes = vec![];
+            for candidate in candidate_set {
+                value_selected +=
+                    Amount::from_u64(D::WalletNote::value_from_note(&candidate.note())).unwrap();
+                notes.push(candidate);
                 if value_selected >= target_amount {
-                    break (notes, value_selected);
+                    return (notes, value_selected);
                 }
-            } else {
-                break (notes, value_selected);
             }
+            last_loop_notes = notes;
+            last_loop_value = value_selected;
         }
+
+        // If there's not enough value in this pool to meet the target amount,
+        // select all of it.
+        (last_loop_notes, last_loop_value)
     }
 
     pub async fn send_to_address<F, Fut, P: TxProver>(
