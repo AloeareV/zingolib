@@ -12,11 +12,11 @@ use super::{extended_transparent::KeyIndex, Keys};
 #[derive(Clone, Debug)]
 pub struct UnifiedSpendAuthority {
     orchard_key: orchard::keys::SpendingKey,
-    sapling_key: zcash_primitives::zip32::ExtendedSpendingKey,
+    pub sapling_key: zcash_primitives::zip32::ExtendedSpendingKey,
     transparent_parent_key: super::extended_transparent::ExtendedPrivKey,
     transparent_child_keys: Vec<secp256k1::SecretKey>,
 
-    addresses: Vec<UnifiedAddress>,
+    pub addresses: Vec<UnifiedAddress>,
     // Not all diversifier indexes produce valid sapling addresses.
     // Because of this, the index isn't necessarily equal to addresses.len()
     next_sapling_diversifier_index: DiversifierIndex,

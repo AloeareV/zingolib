@@ -137,37 +137,14 @@ pub struct Keys {
 
     // List of keys, actually in this wallet. This is a combination of HD keys derived from the seed,
     // viewing keys and imported spending keys.
-    pub(crate) zkeys: Vec<SaplingKey>,
+    pub(crate) legacy_sapling_keys: Vec<SaplingKey>,
 
     // Transparent keys. If the wallet is locked, then the secret keys will be encrypted,
     // but the addresses will be present. This Vec contains both wallet and imported tkeys
-    pub(crate) tkeys: Vec<TransparentKey>,
-
-    // Orchard keys
-    pub(crate) okeys: Vec<OrchardKey>,
+    pub(crate) legacy_transparent_keys: Vec<TransparentKey>,
 }
 
 impl Keys {
-    pub(crate) fn zkeys(&self) -> &Vec<SaplingKey> {
-        &self.zkeys
-    }
-    pub(crate) fn okeys(&self) -> &Vec<OrchardKey> {
-        &self.okeys
-    }
-    #[allow(dead_code)]
-    pub(crate) fn tkeys(&self) -> &Vec<TransparentKey> {
-        &self.tkeys
-    }
-    pub(crate) fn zkeys_mut(&mut self) -> &mut Vec<SaplingKey> {
-        &mut self.zkeys
-    }
-    pub(crate) fn okeys_mut(&mut self) -> &mut Vec<OrchardKey> {
-        &mut self.okeys
-    }
-    #[allow(dead_code)]
-    pub(crate) fn tkeys_mut(&mut self) -> &mut Vec<TransparentKey> {
-        &mut self.tkeys
-    }
     pub fn serialized_version() -> u64 {
         return 22;
     }
@@ -182,18 +159,13 @@ impl Keys {
             enc_seed: [0; 48],
             nonce: vec![],
             seed: [0u8; 32],
-            zkeys: vec![],
-            tkeys: vec![],
-            okeys: vec![],
+            legacy_transparent_keys: vec![],
+            legacy_sapling_keys: vec![],
             unified_keys: vec![],
         }
     }
 
-    pub fn new(
-        config: &ZingoConfig,
-        seed_phrase: Option<String>,
-        num_zaddrs: u32,
-    ) -> Result<Self, String> {
+    pub fn new(config: &ZingoConfig, seed_phrase: Option<String>) -> Result<Self, String> {
         let mut seed_bytes = [0u8; 32];
 
         if seed_phrase.is_none() {
@@ -219,15 +191,6 @@ impl Keys {
 
         let unified_keys = vec![UnifiedSpendAuthority::new_from_seed(config, &bip39_seed, 0)];
 
-        // Derive only the first sk and address
-        let tpk = TransparentKey::new_hdkey(config, 0, &bip39_seed);
-
-        let mut zkeys = vec![];
-        for hdkey_num in 0..num_zaddrs {
-            let (extsk, _, _) = Self::get_zaddr_from_bip39seed(&config, &bip39_seed, hdkey_num);
-            zkeys.push(SaplingKey::new_hdkey(hdkey_num, extsk));
-        }
-
         Ok(Self {
             config: config.clone(),
             encrypted: false,
@@ -236,156 +199,8 @@ impl Keys {
             nonce: vec![],
             seed: seed_bytes,
             unified_keys,
-            zkeys,
-            tkeys: vec![tpk],
-            okeys: vec![],
-        })
-    }
-
-    pub fn read_old<R: Read>(
-        version: u64,
-        mut reader: R,
-        config: &ZingoConfig,
-    ) -> io::Result<Self> {
-        let encrypted = if version >= 4 {
-            reader.read_u8()? > 0
-        } else {
-            false
-        };
-
-        let mut enc_seed = [0u8; 48];
-        if version >= 4 {
-            reader.read_exact(&mut enc_seed)?;
-        }
-
-        let nonce = if version >= 4 {
-            Vector::read(&mut reader, |r| r.read_u8())?
-        } else {
-            vec![]
-        };
-
-        // Seed
-        let mut seed_bytes = [0u8; 32];
-        reader.read_exact(&mut seed_bytes)?;
-
-        let zkeys = if version <= 6 {
-            // Up until version 6, the wallet keys were written out individually
-            // Read the spending keys
-            let extsks = Vector::read(&mut reader, |r| ExtendedSpendingKey::read(r))?;
-
-            let extfvks = if version >= 4 {
-                // Read the viewing keys
-                Vector::read(&mut reader, |r| ExtendedFullViewingKey::read(r))?
-            } else {
-                // Calculate the viewing keys
-                extsks
-                    .iter()
-                    .map(|sk| ExtendedFullViewingKey::from(sk))
-                    .collect::<Vec<ExtendedFullViewingKey>>()
-            };
-
-            // Calculate the addresses
-            let addresses = extfvks
-                .iter()
-                .map(|fvk| fvk.default_address().1)
-                .collect::<Vec<PaymentAddress>>();
-
-            // If extsks is of len 0, then this wallet is locked
-            let zkeys_result = if extsks.len() == 0 {
-                // Wallet is locked, so read only the viewing keys.
-                extfvks
-                    .iter()
-                    .zip(addresses.iter())
-                    .enumerate()
-                    .map(|(i, (extfvk, payment_address))| {
-                        let zk = SaplingKey::new_locked_hdkey(i as u32, extfvk.clone());
-                        if zk.zaddress != *payment_address {
-                            Err(io::Error::new(
-                                ErrorKind::InvalidData,
-                                "Payment address didn't match",
-                            ))
-                        } else {
-                            Ok(zk)
-                        }
-                    })
-                    .collect::<Vec<io::Result<SaplingKey>>>()
-            } else {
-                // Wallet is unlocked, read the spending keys as well
-                extsks
-                    .into_iter()
-                    .zip(extfvks.into_iter().zip(addresses.iter()))
-                    .enumerate()
-                    .map(|(i, (extsk, (extfvk, payment_address)))| {
-                        let zk = SaplingKey::new_hdkey(i as u32, extsk);
-                        if zk.zaddress != *payment_address {
-                            return Err(io::Error::new(
-                                ErrorKind::InvalidData,
-                                "Payment address didn't match",
-                            ));
-                        }
-
-                        if zk.extfvk != extfvk {
-                            return Err(io::Error::new(
-                                ErrorKind::InvalidData,
-                                "Full View key didn't match",
-                            ));
-                        }
-
-                        Ok(zk)
-                    })
-                    .collect::<Vec<io::Result<SaplingKey>>>()
-            };
-
-            // Convert vector of results into result of vector, returning an error if any one of the keys failed the checks above
-            zkeys_result.into_iter().collect::<io::Result<_>>()?
-        } else {
-            // After version 6, we read the WalletZKey structs directly
-            Vector::read(&mut reader, |r| SaplingKey::read(r))?
-        };
-
-        let tkeys = if version <= 20 {
-            let tkeys = Vector::read(&mut reader, |r| {
-                let mut tpk_bytes = [0u8; 32];
-                r.read_exact(&mut tpk_bytes)?;
-                secp256k1::SecretKey::from_slice(&tpk_bytes)
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))
-            })?;
-
-            let taddresses = if version >= 4 {
-                // Read the addresses
-                Vector::read(&mut reader, |r| utils::read_string(r))?
-            } else {
-                // Calculate the addresses
-                tkeys
-                    .iter()
-                    .map(|sk| {
-                        TransparentKey::address_from_prefix_sk(&config.base58_pubkey_address(), sk)
-                    })
-                    .collect()
-            };
-
-            tkeys
-                .iter()
-                .zip(taddresses.iter())
-                .enumerate()
-                .map(|(i, (sk, taddr))| TransparentKey::from_raw(sk, taddr, i as u32))
-                .collect::<Vec<_>>()
-        } else {
-            // Read the TKeys
-            Vector::read(&mut reader, |r| TransparentKey::read(r))?
-        };
-
-        Ok(Self {
-            config: config.clone(),
-            encrypted,
-            unlocked: !encrypted,
-            enc_seed,
-            nonce,
-            seed: seed_bytes,
-            unified_keys: vec![],
-            zkeys,
-            tkeys,
-            okeys: vec![],
+            legacy_sapling_keys: vec![],
+            legacy_transparent_keys: vec![],
         })
     }
 
@@ -410,7 +225,7 @@ impl Keys {
         let mut seed_bytes = [0u8; 32];
         reader.read_exact(&mut seed_bytes)?;
 
-        let zkeys = Vector::read(&mut reader, |r| SaplingKey::read(r))?;
+        let legacy_sapling_keys = Vector::read(&mut reader, |r| SaplingKey::read(r))?;
 
         let okeys = if version > 21 {
             Vector::read(&mut reader, |r| OrchardKey::read(r))?
@@ -418,7 +233,7 @@ impl Keys {
             vec![]
         };
 
-        let tkeys = if version <= 20 {
+        let legacy_transparent_keys = if version <= 20 {
             let tkeys = Vector::read(&mut reader, |r| {
                 let mut tpk_bytes = [0u8; 32];
                 r.read_exact(&mut tpk_bytes)?;
@@ -447,9 +262,8 @@ impl Keys {
             nonce,
             seed: seed_bytes,
             unified_keys: vec![], // TODO: Read/write these
-            zkeys,
-            tkeys,
-            okeys,
+            legacy_sapling_keys,
+            legacy_transparent_keys,
         })
     }
 
@@ -473,13 +287,12 @@ impl Keys {
         writer.flush()?;
 
         // Write all the wallet's sapling keys
-        Vector::write(&mut writer, &self.zkeys, |w, zk| zk.write(w))?;
-
-        // Write all the wallet's orchard keys
-        Vector::write(&mut writer, &self.okeys, |w, ok| ok.write(w))?;
+        Vector::write(&mut writer, &self.legacy_sapling_keys, |w, zk| zk.write(w))?;
 
         // Write the transparent private keys
-        Vector::write(&mut writer, &self.tkeys, |w, sk| sk.write(w))?;
+        Vector::write(&mut writer, &self.legacy_transparent_keys, |w, sk| {
+            sk.write(w)
+        })?;
 
         Ok(())
     }
@@ -500,46 +313,31 @@ impl Keys {
     }
 
     pub fn get_all_sapling_extfvks(&self) -> Vec<ExtendedFullViewingKey> {
-        self.zkeys.iter().map(|zk| zk.extfvk.clone()).collect()
-    }
-
-    pub(crate) fn get_all_orchard_keys_of_type<T>(&self) -> Vec<T>
-    where
-        for<'a> T: TryFrom<&'a WalletOKeyInner>,
-    {
-        self.okeys
+        self.legacy_sapling_keys
             .iter()
-            .filter_map(|k| T::try_from(&k.key).ok())
+            .map(|zk| zk.extfvk.clone())
+            .chain(self.unified_keys.iter().map(|unified_spend_auth| {
+                ExtendedFullViewingKey::from(&unified_spend_auth.sapling_key)
+            }))
             .collect()
     }
 
     pub fn get_all_sapling_addresses(&self) -> Vec<String> {
-        self.zkeys
+        self.legacy_sapling_keys
             .iter()
-            .map(|zk| encode_payment_address(self.config.hrp_sapling_address(), &zk.zaddress))
+            .map(|sapling_key| &sapling_key.zaddress)
+            .chain(
+                self.unified_keys
+                    .iter()
+                    .flat_map(|unified_spend_authority| {
+                        unified_spend_authority
+                            .addresses
+                            .iter()
+                            .filter_map(|unified_address| unified_address.sapling())
+                    }),
+            )
+            .map(|address| encode_payment_address(self.config.hrp_sapling_address(), &address))
             .collect()
-    }
-
-    pub fn get_all_orchard_addresses(&self) -> Vec<String> {
-        self.okeys
-            .iter()
-            .map(|zk| zk.unified_address.encode(&self.config.chain))
-            .collect()
-    }
-
-    pub fn get_all_spendable_zaddresses(&self) -> Vec<String> {
-        self.zkeys
-            .iter()
-            .filter(|zk| zk.have_sapling_spending_key())
-            .map(|zk| encode_payment_address(self.config.hrp_sapling_address(), &zk.zaddress))
-            .collect()
-    }
-
-    pub fn get_all_taddrs(&self) -> Vec<String> {
-        self.tkeys
-            .iter()
-            .map(|tk| tk.address.clone())
-            .collect::<Vec<_>>()
     }
 
     pub fn have_sapling_spending_key(&self, extfvk: &ExtendedFullViewingKey) -> bool {
@@ -548,17 +346,6 @@ impl Keys {
             .find(|zk| zk.extfvk == *extfvk)
             .map(|zk| zk.have_sapling_spending_key())
             .unwrap_or(false)
-    }
-
-    pub fn have_orchard_spending_key(&self, ivk: &OrchardIncomingViewingKey) -> bool {
-        self.okeys
-            .iter()
-            .find(|orchard_key| {
-                OrchardIncomingViewingKey::try_from(&orchard_key.key).as_ref() == Ok(ivk)
-            })
-            .map(|orchard_key| OrchardSpendingKey::try_from(&orchard_key.key).ok())
-            .flatten()
-            .is_some()
     }
 
     pub fn get_spend_key_for_fvk<D>(&self, fvk: &D::Fvk) -> Option<<D::Key as WalletKey>::SpendKey>
