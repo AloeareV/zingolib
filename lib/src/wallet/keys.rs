@@ -134,14 +134,6 @@ pub struct Keys {
     // Unified spending keys derived from the wallet seed. This will eventually replace
     // all other HD keys.
     pub(crate) unified_keys: Vec<UnifiedSpendAuthority>,
-
-    // List of keys, actually in this wallet. This is a combination of HD keys derived from the seed,
-    // viewing keys and imported spending keys.
-    pub(crate) legacy_sapling_keys: Vec<SaplingKey>,
-
-    // Transparent keys. If the wallet is locked, then the secret keys will be encrypted,
-    // but the addresses will be present. This Vec contains both wallet and imported tkeys
-    pub(crate) legacy_transparent_keys: Vec<TransparentKey>,
 }
 
 impl Keys {
@@ -159,8 +151,6 @@ impl Keys {
             enc_seed: [0; 48],
             nonce: vec![],
             seed: [0u8; 32],
-            legacy_transparent_keys: vec![],
-            legacy_sapling_keys: vec![],
             unified_keys: vec![],
         }
     }
@@ -199,8 +189,6 @@ impl Keys {
             nonce: vec![],
             seed: seed_bytes,
             unified_keys,
-            legacy_sapling_keys: vec![],
-            legacy_transparent_keys: vec![],
         })
     }
 
@@ -225,35 +213,6 @@ impl Keys {
         let mut seed_bytes = [0u8; 32];
         reader.read_exact(&mut seed_bytes)?;
 
-        let legacy_sapling_keys = Vector::read(&mut reader, |r| SaplingKey::read(r))?;
-
-        let okeys = if version > 21 {
-            Vector::read(&mut reader, |r| OrchardKey::read(r))?
-        } else {
-            vec![]
-        };
-
-        let legacy_transparent_keys = if version <= 20 {
-            let tkeys = Vector::read(&mut reader, |r| {
-                let mut tpk_bytes = [0u8; 32];
-                r.read_exact(&mut tpk_bytes)?;
-                secp256k1::SecretKey::from_slice(&tpk_bytes)
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))
-            })?;
-
-            let taddresses = Vector::read(&mut reader, |r| utils::read_string(r))?;
-
-            tkeys
-                .iter()
-                .zip(taddresses.iter())
-                .enumerate()
-                .map(|(i, (sk, taddr))| TransparentKey::from_raw(sk, taddr, i as u32))
-                .collect::<Vec<_>>()
-        } else {
-            // Read the TKeys
-            Vector::read(&mut reader, |r| TransparentKey::read(r))?
-        };
-
         Ok(Self {
             config: config.clone(),
             encrypted,
@@ -262,8 +221,6 @@ impl Keys {
             nonce,
             seed: seed_bytes,
             unified_keys: vec![], // TODO: Read/write these
-            legacy_sapling_keys,
-            legacy_transparent_keys,
         })
     }
 
@@ -286,13 +243,8 @@ impl Keys {
         // Flush after writing the seed, so in case of a disaster, we can still recover the seed.
         writer.flush()?;
 
-        // Write all the wallet's sapling keys
-        Vector::write(&mut writer, &self.legacy_sapling_keys, |w, zk| zk.write(w))?;
-
-        // Write the transparent private keys
-        Vector::write(&mut writer, &self.legacy_transparent_keys, |w, sk| {
-            sk.write(w)
-        })?;
+        // Write the keys
+        Vector::write(&mut writer, &self.unified_keys, |w, sk| sk.write(w))?;
 
         Ok(())
     }
@@ -312,42 +264,6 @@ impl Keys {
             .to_string()
     }
 
-    pub fn get_all_sapling_extfvks(&self) -> Vec<ExtendedFullViewingKey> {
-        self.legacy_sapling_keys
-            .iter()
-            .map(|zk| zk.extfvk.clone())
-            .chain(self.unified_keys.iter().map(|unified_spend_auth| {
-                ExtendedFullViewingKey::from(&unified_spend_auth.sapling_key)
-            }))
-            .collect()
-    }
-
-    pub fn get_all_sapling_addresses(&self) -> Vec<String> {
-        self.legacy_sapling_keys
-            .iter()
-            .map(|sapling_key| &sapling_key.zaddress)
-            .chain(
-                self.unified_keys
-                    .iter()
-                    .flat_map(|unified_spend_authority| {
-                        unified_spend_authority
-                            .addresses
-                            .iter()
-                            .filter_map(|unified_address| unified_address.sapling())
-                    }),
-            )
-            .map(|address| encode_payment_address(self.config.hrp_sapling_address(), &address))
-            .collect()
-    }
-
-    pub fn have_sapling_spending_key(&self, extfvk: &ExtendedFullViewingKey) -> bool {
-        self.zkeys
-            .iter()
-            .find(|zk| zk.extfvk == *extfvk)
-            .map(|zk| zk.have_sapling_spending_key())
-            .unwrap_or(false)
-    }
-
     pub fn get_spend_key_for_fvk<D>(&self, fvk: &D::Fvk) -> Option<<D::Key as WalletKey>::SpendKey>
     where
         D: DomainWalletExt<zingoconfig::Network>,
@@ -359,238 +275,6 @@ impl Keys {
             .find(|wallet_key| wallet_key.fvk().as_ref() == Some(fvk))
             .map(|wallet_key| wallet_key.spend_key())
             .flatten()
-    }
-
-    pub fn get_taddr_to_sk_map(&self) -> HashMap<String, secp256k1::SecretKey> {
-        self.tkeys
-            .iter()
-            .map(|tk| (tk.address.clone(), tk.key.unwrap().clone()))
-            .collect()
-    }
-
-    // If one of the last 'n' taddress was used, ensure we add the next HD taddress to the wallet.
-    pub fn ensure_hd_taddresses(&mut self, address: &String) {
-        if GAP_RULE_UNUSED_ADDRESSES == 0 {
-            return;
-        }
-
-        let last_addresses = {
-            self.tkeys
-                .iter()
-                .filter(|tk| tk.keytype == WalletTKeyType::HdKey)
-                .rev()
-                .take(GAP_RULE_UNUSED_ADDRESSES)
-                .map(|s| s.address.clone())
-                .collect::<Vec<String>>()
-        };
-
-        match last_addresses.iter().position(|s| *s == *address) {
-            None => {
-                return;
-            }
-            Some(pos) => {
-                //info!("Adding {} new zaddrs", (GAP_RULE_UNUSED_ADDRESSES - pos));
-                // If it in the last unused, addresses, create that many more
-                for _ in 0..(GAP_RULE_UNUSED_ADDRESSES - pos) {
-                    // If the wallet is locked, this is a no-op. That is fine, since we really
-                    // need to only add new addresses when restoring a new wallet, when it will not be locked.
-                    // Also, if it is locked, the user can't create new addresses anyway.
-                    self.add_taddr();
-                }
-            }
-        }
-    }
-
-    // If one of the last 'n' zaddress was used, ensure we add the next HD zaddress to the wallet
-    pub fn ensure_hd_zaddresses(&mut self, address: &String) {
-        if GAP_RULE_UNUSED_ADDRESSES == 0 {
-            return;
-        }
-
-        let last_addresses = {
-            self.zkeys
-                .iter()
-                .filter(|zk| zk.keytype == WalletZKeyType::HdKey)
-                .rev()
-                .take(GAP_RULE_UNUSED_ADDRESSES)
-                .map(|s| encode_payment_address(self.config.hrp_sapling_address(), &s.zaddress))
-                .collect::<Vec<String>>()
-        };
-
-        match last_addresses.iter().position(|s| *s == *address) {
-            None => {
-                return;
-            }
-            Some(pos) => {
-                //info!("Adding {} new zaddrs", (GAP_RULE_UNUSED_ADDRESSES - pos));
-                // If it in the last unused, addresses, create that many more
-                for _ in 0..(GAP_RULE_UNUSED_ADDRESSES - pos) {
-                    // If the wallet is locked, this is a no-op. That is fine, since we really
-                    // need to only add new addresses when restoring a new wallet, when it will not be locked.
-                    // Also, if it is locked, the user can't create new addresses anyway.
-                    self.add_zaddr();
-                }
-            }
-        }
-    }
-
-    /// Adds a new z address to the wallet. This will derive a new address from the seed
-    /// at the next position and add it to the wallet.
-    /// NOTE: This does NOT rescan
-    pub fn add_zaddr(&mut self) -> String {
-        if !self.unlocked {
-            return "Error: Can't add key while wallet is locked".to_string();
-        }
-
-        // Find the highest pos we have
-        let pos = self
-            .zkeys
-            .iter()
-            .filter(|zk| zk.hdkey_num.is_some())
-            .max_by(|zk1, zk2| zk1.hdkey_num.unwrap().cmp(&zk2.hdkey_num.unwrap()))
-            .map_or(0, |zk| zk.hdkey_num.unwrap() + 1);
-
-        let bip39_seed = &Mnemonic::from_entropy(self.seed).unwrap().to_seed("");
-
-        let (extsk, _, _) = Self::get_zaddr_from_bip39seed(&self.config, bip39_seed, pos);
-
-        // let zaddr = encode_payment_address(self.config.hrp_sapling_address(), &address);
-        let newkey = SaplingKey::new_hdkey(pos, extsk);
-        self.zkeys.push(newkey.clone());
-
-        encode_payment_address(self.config.hrp_sapling_address(), &newkey.zaddress)
-    }
-
-    /// Adds a new orchard address to the wallet. This will derive a new address from the seed
-    /// at the next position and add it to the wallet.
-    /// NOTE: This does NOT rescan
-    pub fn add_orchard_addr(&mut self) -> String {
-        if !self.unlocked {
-            return "Error: Can't add key while wallet is locked".to_string();
-        }
-
-        // Find the highest pos we have, use it as an account number
-        let account = self
-            .okeys
-            .iter()
-            .filter_map(|ok| ok.hdkey_num)
-            .max()
-            .map_or(0, |hdkey_num| hdkey_num + 1);
-
-        let bip39_seed = &Mnemonic::from_entropy(self.seed).unwrap().to_seed("");
-
-        let spending_key = ::orchard::keys::SpendingKey::from_zip32_seed(
-            bip39_seed,
-            self.config.get_coin_type(),
-            account,
-        )
-        .unwrap();
-
-        let newkey = OrchardKey::new_hdkey(account, spending_key);
-        self.okeys.push(newkey.clone());
-
-        newkey.unified_address.encode(&self.config.chain)
-    }
-    /// Add a new t address to the wallet. This will derive a new address from the seed
-    /// at the next position.
-    /// NOTE: This will not rescan the wallet
-    pub fn add_taddr(&mut self) -> String {
-        if !self.unlocked {
-            return "Error: Can't add key while wallet is locked".to_string();
-        }
-
-        // Find the highest pos we have
-        let pos = self
-            .tkeys
-            .iter()
-            .filter(|sk| sk.hdkey_num.is_some())
-            .max_by(|sk1, sk2| sk1.hdkey_num.unwrap().cmp(&sk2.hdkey_num.unwrap()))
-            .map_or(0, |sk| sk.hdkey_num.unwrap() + 1);
-
-        let bip39_seed = &Mnemonic::from_entropy(self.seed).unwrap().to_seed("");
-
-        let key = TransparentKey::new_hdkey(&self.config, pos, bip39_seed);
-        let address = key.address.clone();
-        self.tkeys.push(key);
-
-        address
-    }
-
-    // Get all z-address private keys. Returns a Vector of (address, privatekey, viewkey)
-    pub fn get_z_private_keys(&self) -> Vec<(String, String, String)> {
-        let keys = self
-            .zkeys
-            .iter()
-            .map(|k| {
-                let pkey = match k.extsk.clone().map(|extsk| {
-                    encode_extended_spending_key(self.config.hrp_sapling_private_key(), &extsk)
-                }) {
-                    Some(pk) => pk,
-                    None => "".to_string(),
-                };
-
-                let vkey = encode_extended_full_viewing_key(
-                    self.config.hrp_sapling_viewing_key(),
-                    &k.extfvk,
-                );
-
-                (
-                    encode_payment_address(self.config.hrp_sapling_address(), &k.zaddress),
-                    pkey,
-                    vkey,
-                )
-            })
-            .collect::<Vec<(String, String, String)>>();
-
-        keys
-    }
-
-    // Get all orchard spending keys. Returns a Vector of (address, spendingkey, fullviewingkey)
-    pub fn get_orchard_spending_keys(&self) -> Vec<(String, String, String)> {
-        let keys = self
-            .okeys
-            .iter()
-            .map(|k| {
-                use bech32::ToBase32 as _;
-                let pkey = match ::orchard::keys::SpendingKey::try_from(&k.key) {
-                    Ok(spending_key) => bech32::encode(
-                        self.config.chain.hrp_orchard_spending_key(),
-                        spending_key.to_bytes().to_base32(),
-                        bech32::Variant::Bech32m,
-                    )
-                    .unwrap_or_else(|e| e.to_string()),
-                    Err(_) => "".to_string(),
-                };
-
-                let vkey = match ::orchard::keys::FullViewingKey::try_from(&k.key) {
-                    Ok(viewing_key) => {
-                        Ufvk::try_from_items(vec![zcash_address::unified::Fvk::Orchard(
-                            viewing_key.to_bytes(),
-                        )])
-                        .map(|vk| vk.encode(&self.config.chain.to_zcash_address_network()))
-                        .unwrap_or_else(|e| e.to_string())
-                    }
-                    Err(_) => "".to_string(),
-                };
-
-                (k.unified_address.encode(&self.config.chain), pkey, vkey)
-            })
-            .collect::<Vec<(String, String, String)>>();
-
-        keys
-    }
-
-    /// Get all t-address private keys. Returns a Vector of (address, secretkey)
-    pub fn get_t_secret_keys(&self) -> Vec<(String, String)> {
-        self.tkeys
-            .iter()
-            .map(|sk| {
-                (
-                    sk.address.clone(),
-                    sk.sk_as_string(&self.config).unwrap_or_default(),
-                )
-            })
-            .collect::<Vec<(String, String)>>()
     }
 
     pub fn encrypt(&mut self, passwd: String) -> io::Result<()> {
@@ -610,16 +294,7 @@ impl Keys {
         self.enc_seed.copy_from_slice(&cipher);
         self.nonce = nonce.as_ref().to_vec();
 
-        // Encrypt the individual keys
-        self.zkeys
-            .iter_mut()
-            .map(|k| k.encrypt(&key))
-            .collect::<io::Result<Vec<()>>>()?;
-
-        self.tkeys
-            .iter_mut()
-            .map(|k| k.encrypt(&key))
-            .collect::<io::Result<Vec<()>>>()?;
+        todo!("Encryption not yet implemented");
 
         self.encrypted = true;
         self.lock()?;
@@ -644,17 +319,6 @@ impl Keys {
 
         // Empty the seed and the secret keys
         self.seed.copy_from_slice(&[0u8; 32]);
-
-        // Remove all the private key from the zkeys and tkeys
-        self.tkeys
-            .iter_mut()
-            .map(|tk| tk.lock())
-            .collect::<io::Result<Vec<_>>>()?;
-
-        self.zkeys
-            .iter_mut()
-            .map(|zk| zk.lock())
-            .collect::<io::Result<Vec<_>>>()?;
 
         self.unlocked = false;
 
@@ -699,18 +363,6 @@ impl Keys {
         let bip39_seed = &Mnemonic::from_entropy(seed).unwrap().to_seed("");
         let config = self.config.clone();
 
-        // Transparent keys
-        self.tkeys
-            .iter_mut()
-            .map(|tk| tk.unlock(&config, bip39_seed, &key))
-            .collect::<io::Result<Vec<()>>>()?;
-
-        // Go over the zkeys, and add the spending keys again
-        self.zkeys
-            .iter_mut()
-            .map(|zk| zk.unlock(&config, bip39_seed, &key))
-            .collect::<io::Result<Vec<()>>>()?;
-
         self.encrypted = true;
         self.unlocked = true;
 
@@ -731,17 +383,6 @@ impl Keys {
         if !self.unlocked {
             self.unlock(passwd)?;
         }
-
-        // Remove encryption from individual zkeys and tkeys
-        self.tkeys
-            .iter_mut()
-            .map(|tk| tk.remove_encryption())
-            .collect::<io::Result<Vec<()>>>()?;
-
-        self.zkeys
-            .iter_mut()
-            .map(|zk| zk.remove_encryption())
-            .collect::<io::Result<Vec<()>>>()?;
 
         // Permanantly remove the encryption
         self.encrypted = false;
