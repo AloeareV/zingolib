@@ -123,14 +123,14 @@ fn send_mined_sapling_to_orchard() {
 /// to change servers after boot
 #[test]
 fn note_selection_order() {
-    let (regtest_manager_1, _child_process_handler_1, client_1, runtime) =
+    let (regtest_manager_1, _child_process_handler_1, client_1, _) =
         setup::coinbasebacked_spendcapable();
     let (_regtest_manager_2, child_process_handler_2, client_2, _) =
         setup::coinbasebacked_spendcapable();
     // We just want the second client, we don't want the zcashd or lightwalletd
     drop(child_process_handler_2);
 
-    runtime.block_on(async {
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
         sleep(Duration::from_secs(1)).await;
         regtest_manager_1.generate_n_blocks(5).unwrap();
         sleep(Duration::from_secs(1)).await;
