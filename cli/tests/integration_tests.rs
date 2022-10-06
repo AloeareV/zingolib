@@ -118,6 +118,15 @@ fn send_mined_sapling_to_orchard() {
         assert_eq!(balance["verified_orchard_balance"], 5000);
     });
 }
+async fn check_client_blockchain_height_belief(
+    client: &zingolib::lightclient::LightClient,
+    n: u64,
+) {
+    assert_eq!(
+        json::parse(&client.do_info().await).unwrap()["latest_block_height"],
+        json::number::Number::from(n)
+    );
+}
 /// This implements similar behavior to 'two_clients_a_coinbase_backed', but with the
 /// advantage of starting client_b on a different server, thus testing the ability
 /// to change servers after boot
@@ -131,14 +140,9 @@ fn note_selection_order() {
     drop(child_process_handler_2);
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        //
         client_1.do_sync(true).await.unwrap();
-        assert_eq!(
-            json::parse(&client_1.do_info().await).unwrap()["latest_block_height"],
-            json::number::Number::from(6u64)
-        );
+        check_client_blockchain_height_belief(&client_1, 6).await;
         client_2.set_server(client_1.get_server().clone());
-        client_2.do_rescan().await.unwrap();
         let address_of_2 = client_2.do_address().await["sapling_addresses"][0].clone();
         for n in 1..=5 {
             client_1
@@ -150,6 +154,7 @@ fn note_selection_order() {
                 .await
                 .unwrap();
         }
+        client_2.do_rescan().await.unwrap();
         regtest_manager_1.generate_n_blocks(5).unwrap();
         sleep(Duration::from_secs(2)).await;
         client_2.do_sync(true).await.unwrap();
