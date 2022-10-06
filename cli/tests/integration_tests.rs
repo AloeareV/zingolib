@@ -118,7 +118,7 @@ fn send_mined_sapling_to_orchard() {
         assert_eq!(balance["verified_orchard_balance"], 5000);
     });
 }
-/// This uses a manual outdated version of two_clients_a_coinbase_backed, but with the
+/// This implements similar behavior to 'two_clients_a_coinbase_backed', but with the
 /// advantage of starting client_b on a different server, thus testing the ability
 /// to change servers after boot
 #[test]
@@ -131,11 +131,12 @@ fn note_selection_order() {
     drop(child_process_handler_2);
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        sleep(Duration::from_secs(1)).await;
-        regtest_manager_1.generate_n_blocks(5).unwrap();
-        sleep(Duration::from_secs(1)).await;
+        //
         client_1.do_sync(true).await.unwrap();
-
+        assert_eq!(
+            json::parse(&client_1.do_info().await).unwrap()["latest_block_height"],
+            json::number::Number::from(6u64)
+        );
         client_2.set_server(client_1.get_server().clone());
         client_2.do_rescan().await.unwrap();
         let address_of_2 = client_2.do_address().await["sapling_addresses"][0].clone();
