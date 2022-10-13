@@ -3,8 +3,8 @@ use std::io::{self, Read, Write};
 
 use super::{
     data::{
-        ChannelNullifier, OrchardNoteAndMetadata, SaplingNoteAndMetadata, SpendableOrchardNote,
-        SpendableSaplingNote, TransactionMetadata, WitnessCache,
+        ChannelNullifier, OrchardNoteAndMetadata, OutgoingTxMetadata, SaplingNoteAndMetadata,
+        SpendableOrchardNote, SpendableSaplingNote, TransactionMetadata, WitnessCache,
     },
     keys::{orchard::OrchardKey, sapling::SaplingKey, Keys},
     transactions::TransactionMetadataSet,
@@ -229,7 +229,7 @@ impl<Auth> Spend for Action<Auth> {
 pub trait Recipient {
     type Diversifier: Copy;
     fn diversifier(&self) -> Self::Diversifier;
-    fn b32encode_for_network(&self, chain: &Network) -> String;
+    fn b32encode_for_network(&self, chain: &impl Parameters) -> String;
 }
 
 impl Recipient for OrchardAddress {
@@ -239,7 +239,7 @@ impl Recipient for OrchardAddress {
         OrchardAddress::diversifier(&self)
     }
 
-    fn b32encode_for_network(&self, chain: &Network) -> String {
+    fn b32encode_for_network(&self, chain: &impl Parameters) -> String {
         unified::Address::try_from_items(vec![Receiver::Orchard(self.to_raw_address_bytes())])
             .expect("Could not create UA from orchard address")
             .encode(&chain.address_network().unwrap())
@@ -253,7 +253,7 @@ impl Recipient for SaplingAddress {
         *SaplingAddress::diversifier(&self)
     }
 
-    fn b32encode_for_network(&self, chain: &Network) -> String {
+    fn b32encode_for_network(&self, chain: &impl Parameters) -> String {
         encode_payment_address(chain.hrp_sapling_payment_address(), self)
     }
 }
@@ -263,6 +263,7 @@ pub trait CompactOutput<D: DomainWalletExt<P>, P: Parameters>:
 where
     D::Recipient: Recipient,
     <D as Domain>::Note: PartialEq + Clone,
+    <D as Domain>::Memo: ToBytes<512>,
 {
     fn from_compact_transaction(compact_transaction: &CompactTx) -> &Vec<Self>;
     fn cmstar(&self) -> &[u8; 32];
@@ -306,6 +307,7 @@ pub trait Bundle<D: DomainWalletExt<P>, P: Parameters>
 where
     D::Recipient: Recipient,
     D::Note: PartialEq + Clone,
+    <D as Domain>::Memo: ToBytes<512>,
 {
     /// An expenditure of an ?external? output, such that its value is distributed among *this* transaction's outputs.
     type Spend: Spend;
@@ -821,6 +823,7 @@ where
     Self: Sized,
     Self::Note: PartialEq + Clone,
     Self::Recipient: Recipient,
+    Self::Memo: ToBytes<512>,
 {
     const NU: NetworkUpgrade;
 
@@ -845,6 +848,77 @@ where
 
     fn to_notes_vec_mut(_: &mut TransactionMetadata) -> &mut Vec<Self::WalletNote>;
     fn get_tree(tree_state: &TreeState) -> &String;
+    fn try_cross_domain_output_detection(
+        transaction: &Transaction,
+        transaction_block_height: BlockHeight,
+        all_wallet_keys: &Keys,
+        chain: &P,
+    ) -> Option<OutgoingTxMetadata>;
+    fn try_output_detection_for_domain(
+        transaction: &Transaction,
+        transaction_block_height: BlockHeight,
+        all_wallet_keys: &Keys,
+        chain: P,
+    ) -> Vec<OutgoingTxMetadata> {
+        let domain_specific_keys = Self::Key::get_keys(&*all_wallet_keys).clone();
+
+        let ivks = domain_specific_keys
+            .iter()
+            .filter_map(|key| key.ivk())
+            .collect::<Vec<_>>();
+        let domain_tagged_outputs =
+            <Self::Bundle as Bundle<Self, P>>::from_transaction(transaction)
+                .into_iter()
+                .flat_map(|bundle| bundle.outputs().into_iter())
+                .map(|output| {
+                    (
+                        output.domain(transaction_block_height, chain),
+                        output.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+        if domain_specific_keys
+            .iter()
+            .filter_map(|key| key.ovk())
+            .any(|ovk| {
+                domain_tagged_outputs.iter().any(|(_domain, output)| {
+                    zcash_note_encryption::try_output_recovery_with_ovk::<
+                        Self,
+                        <Self::Bundle as Bundle<Self, P>>::Output,
+                    >(
+                        &output.domain(transaction_block_height, chain),
+                        &ovk,
+                        &output,
+                        &output.value_commitment(),
+                        &output.out_ciphertext(),
+                    )
+                    .is_some()
+                })
+            })
+        {
+            // We will recover this output with a same_domain spend, and don't need to do cross_domain
+            return Vec::new();
+        }
+        let mut outgoing_metadatas = Vec::new();
+        for decrypt_attempt in
+            zcash_note_encryption::batch::try_note_decryption(&ivks, &domain_tagged_outputs)
+        {
+            if let Some(((note, recipient, memo_bytes), ivk_num)) = decrypt_attempt {
+                match Memo::from_bytes(&memo_bytes.to_bytes()) {
+                    // We currently can't send invalid memos, but this could maybe be handled better anyway
+                    Err(_) => (),
+                    Ok(memo) => {
+                        let address = recipient.b32encode_for_network(&chain);
+                        outgoing_metadatas.push(OutgoingTxMetadata {
+                            address,
+                            value: Self::WalletNote::value_from_note(&note),
+                        })
+                    }
+                }
+            }
+        }
+        outgoing_metadatas
+    }
 }
 
 impl<P: Parameters> DomainWalletExt<P> for SaplingDomain<P> {
@@ -869,6 +943,18 @@ impl<P: Parameters> DomainWalletExt<P> for SaplingDomain<P> {
     fn get_tree(tree_state: &TreeState) -> &String {
         &tree_state.sapling_tree
     }
+
+    fn try_cross_domain_output_detection(
+        transaction: &Transaction,
+        transaction_block_height: BlockHeight,
+        all_wallet_keys: &Keys,
+    ) -> Option<OutgoingTxMetadata> {
+        OrchardDomain::try_output_detection_for_domain(
+            transaction,
+            transaction_block_height,
+            all_wallet_keys,
+        )
+    }
 }
 
 impl<P: Parameters> DomainWalletExt<P> for OrchardDomain {
@@ -892,6 +978,18 @@ impl<P: Parameters> DomainWalletExt<P> for OrchardDomain {
 
     fn get_tree(tree_state: &TreeState) -> &String {
         &tree_state.orchard_tree
+    }
+
+    fn try_cross_domain_output_detection(
+        transaction: &Transaction,
+        transaction_block_height: BlockHeight,
+        all_wallet_keys: &Keys,
+    ) -> Option<OutgoingTxMetadata> {
+        SaplingDomain::try_output_detection_for_domain(
+            transaction,
+            transaction_block_height,
+            all_wallet_keys,
+        )
     }
 }
 
@@ -936,6 +1034,7 @@ where
     <D as Domain>::Recipient: Recipient,
     <D as Domain>::Note: PartialEq + Clone,
     Self: Sized,
+    <D as Domain>::Memo: ToBytes<512>,
 {
     fn from(
         transaction_id: TxId,

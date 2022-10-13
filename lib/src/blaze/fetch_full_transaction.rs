@@ -147,6 +147,11 @@ impl TransactionContext {
         }
 
         if !outgoing_metadatas.is_empty() {
+            log::info!(
+                "Adding {} outgoing metadatas to tx {}",
+                outgoing_metadatas.len(),
+                transaction.txid()
+            );
             self.transaction_metadata_set
                 .write()
                 .await
@@ -467,7 +472,9 @@ impl TransactionContext {
                                             .contains(&address)
                                             && memo == Memo::Empty
                                         {
-                                            None
+                                            // If we have a change note, we need to make sure to find any outgoing
+                                            // metadata from sapling->orchard or orchard->sapling
+                                            D::try_cross_domain_output_detection()
                                         } else {
                                             Some(OutgoingTxMetadata {
                                                 address,

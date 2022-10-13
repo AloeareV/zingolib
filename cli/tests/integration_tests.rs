@@ -172,6 +172,7 @@ fn note_selection_order() {
 
 #[test]
 fn send_orchard_back_and_forth() {
+    tracing_subscriber::fmt::init();
     let (regtest_manager, client_a, client_b, child_process_handler, runtime) =
         two_clients_a_coinbase_backed();
     runtime.block_on(async {
@@ -211,6 +212,10 @@ fn send_orchard_back_and_forth() {
         assert_eq!(client_b.do_balance().await["sapling_balance"], 4_000);
         assert_eq!(client_b.do_balance().await["orchard_balance"], 0);
 
+        panic!(
+            "{}",
+            json::stringify_pretty(client_a.do_list_transactions(false).await, 4)
+        );
         // Unneeded, but more explicit than having child_process_handler be an
         // unused variable
         drop(child_process_handler);
