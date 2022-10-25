@@ -61,54 +61,45 @@ pub(crate) mod traits;
 pub(crate) mod transactions;
 pub(crate) mod utils;
 
+use std::fmt::Write as FmtWrite;
+
 struct Timer {
     name: String,
-    timer: <std::time::Instant as Trait>::now,
-    time_elapsed: u128
+    time: std::time::Instant
 }
 
 impl Timer {
     fn new(name: String) -> Timer {
-        let mut new_timer = Timer {
+        Timer {
             name,
-            timer: std::time::Instant::now(),
-            time_elapsed: 0
-        };
-        
-        new_timer    
+            time: std::time::Instant::now()
+        }
     }    
 }
 
 struct TaskTimers {
-    timer_list: Vec<Timer>
+    timer_list: Vec<(String, u128)>
 }
 
 impl TaskTimers {
     fn new() -> TaskTimers {
-        let mut new_timers = TaskTimers {
+        TaskTimers {
             timer_list: Vec::new()
-        };
-        
-        new_timers
-    }
-    
-    fn start_timer(&mut self, name: &str) {
-        let mut new_timer = Timer::new(name.to_string());
-        self.timer_list.push(new_timer);
-    }
-    
-    fn stop_timer(&mut self, name: &str) {
-        for mut timer in &self.timer_list {
-            if name == timer.name {
-                timer.time_elapsed = timer.timer.elapsed().as_millis();  
-            }   
         }
     }
     
+    fn create_timer(name: String) -> Timer {
+        Timer::new(name)
+    }
+    
+    fn stop_timer(&mut self, timer: Timer) {
+        self.timer_list.push((timer.name, timer.time.elapsed().as_millis()));
+    }
+    
     fn info(self) {
-        let mut timer_info: String = "".to_string();
+        let mut timer_info = String::from("");
         for timer in self.timer_list {
-            timer_info = timer_info + &format!("\n{} timer: {}", timer.name, timer.time_elapsed.to_string());    
+            write!(timer_info, "\n{} timer: {}ms", timer.0, timer.1).unwrap();    
         }
         
         panic!("\n\ntimer info: {}\n\n", timer_info);
@@ -1184,14 +1175,9 @@ impl LightWallet {
         F: Fn(Box<[u8]>) -> Fut,
         Fut: Future<Output = Result<String, String>>,
     {
-        let mut timers = TaskTimers::new();
-        timers.start_timer("reset");
         // Reset the progress to start. Any errors will get recorded here
         self.reset_send_progress().await;
-        timers.stop_timer("reset");
-        timers.info();
         
-        //let t2 = std::time::Instant::now();
         // Call the internal function
         match self
             .send_to_address_inner(
@@ -1206,13 +1192,7 @@ impl LightWallet {
 
             Ok((transaction_id, raw_transaction)) => {
 
-                //send_timer.push(("send inner", t2.elapsed().as_millis()));
-                //let t3 = std::time::Instant::now();
                 self.set_send_success(transaction_id.clone()).await;
-                //send_timer.push(("success", t3.elapsed().as_millis()));
-                
-                //panic!("\n\ntimer info:{}\n\n", timer_info);
-                
                 Ok((transaction_id, raw_transaction))
             }
             Err(e) => {
