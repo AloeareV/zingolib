@@ -61,6 +61,60 @@ pub(crate) mod traits;
 pub(crate) mod transactions;
 pub(crate) mod utils;
 
+struct Timer {
+    name: String,
+    timer: <std::time::Instant as Trait>::now,
+    time_elapsed: u128
+}
+
+impl Timer {
+    fn new(name: String) -> Timer {
+        let mut new_timer = Timer {
+            name,
+            timer: std::time::Instant::now(),
+            time_elapsed: 0
+        };
+        
+        new_timer    
+    }    
+}
+
+struct TaskTimers {
+    timer_list: Vec<Timer>
+}
+
+impl TaskTimers {
+    fn new() -> TaskTimers {
+        let mut new_timers = TaskTimers {
+            timer_list: Vec::new()
+        };
+        
+        new_timers
+    }
+    
+    fn start_timer(&mut self, name: &str) {
+        let mut new_timer = Timer::new(name.to_string());
+        self.timer_list.push(new_timer);
+    }
+    
+    fn stop_timer(&mut self, name: &str) {
+        for mut timer in &self.timer_list {
+            if name == timer.name {
+                timer.time_elapsed = timer.timer.elapsed().as_millis();  
+            }   
+        }
+    }
+    
+    fn info(self) {
+        let mut timer_info: String = "".to_string();
+        for timer in self.timer_list {
+            timer_info = timer_info + &format!("\n{} timer: {}", timer.name, timer.time_elapsed.to_string());    
+        }
+        
+        panic!("\n\ntimer info: {}\n\n", timer_info);
+    }
+}
+
 pub fn now() -> u64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -1130,9 +1184,14 @@ impl LightWallet {
         F: Fn(Box<[u8]>) -> Fut,
         Fut: Future<Output = Result<String, String>>,
     {
+        let mut timers = TaskTimers::new();
+        timers.start_timer("reset");
         // Reset the progress to start. Any errors will get recorded here
         self.reset_send_progress().await;
-
+        timers.stop_timer("reset");
+        timers.info();
+        
+        //let t2 = std::time::Instant::now();
         // Call the internal function
         match self
             .send_to_address_inner(
@@ -1144,8 +1203,16 @@ impl LightWallet {
             )
             .await
         {
+
             Ok((transaction_id, raw_transaction)) => {
+
+                //send_timer.push(("send inner", t2.elapsed().as_millis()));
+                //let t3 = std::time::Instant::now();
                 self.set_send_success(transaction_id.clone()).await;
+                //send_timer.push(("success", t3.elapsed().as_millis()));
+                
+                //panic!("\n\ntimer info:{}\n\n", timer_info);
+                
                 Ok((transaction_id, raw_transaction))
             }
             Err(e) => {
