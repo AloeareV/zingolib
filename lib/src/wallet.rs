@@ -62,6 +62,51 @@ pub(crate) mod traits;
 pub(crate) mod transactions;
 pub(crate) mod utils;
 
+use std::fmt::Write as FmtWrite;
+
+struct Timer {
+    name: String,
+    time: std::time::Instant
+}
+
+impl Timer {
+    fn new(name: String) -> Timer {
+        Timer {
+            name,
+            time: std::time::Instant::now()
+        }
+    }    
+}
+
+struct TaskTimers {
+    timer_list: Vec<(String, u128)>
+}
+
+impl TaskTimers {
+    fn new() -> TaskTimers {
+        TaskTimers {
+            timer_list: Vec::new()
+        }
+    }
+    
+    fn create_timer(name: String) -> Timer {
+        Timer::new(name)
+    }
+    
+    fn stop_timer(&mut self, timer: Timer) {
+        self.timer_list.push((timer.name, timer.time.elapsed().as_millis()));
+    }
+    
+    fn info(self) {
+        let mut timer_info = String::from("");
+        for timer in self.timer_list {
+            write!(timer_info, "\n{} timer: {}ms", timer.0, timer.1).unwrap();    
+        }
+        
+        panic!("\n\ntimer info: {}\n\n", timer_info);
+    }
+}
+
 pub fn now() -> u64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -1142,7 +1187,7 @@ impl LightWallet {
     {
         // Reset the progress to start. Any errors will get recorded here
         self.reset_send_progress().await;
-
+        
         // Call the internal function
         match self
             .send_to_address_inner(
@@ -1154,7 +1199,9 @@ impl LightWallet {
             )
             .await
         {
+
             Ok((transaction_id, raw_transaction)) => {
+
                 self.set_send_success(transaction_id.clone()).await;
                 Ok((transaction_id, raw_transaction))
             }

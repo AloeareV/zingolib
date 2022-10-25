@@ -1674,9 +1674,7 @@ impl LightClient {
         let result = {
             let _lock = self.sync_lock.lock().await;
             let (sapling_output, sapling_spend) = self.read_sapling_params()?;
-
             let prover = LocalTxProver::from_bytes(&sapling_spend, &sapling_output);
-
             self.wallet
                 .send_to_address(prover, false, false, addrs, |transaction_bytes| {
                     GrpcConnector::send_transaction(self.get_server_uri(), transaction_bytes)
