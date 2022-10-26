@@ -1224,6 +1224,8 @@ impl LightWallet {
         F: Fn(Box<[u8]>) -> Fut,
         Fut: Future<Output = Result<String, String>>,
     {
+        let mut timers = TaskTimers::new();
+        let timer = TaskTimers::create_timer("check for errors".to_string());
         if !self.unified_spend_capability().read().await.unlocked {
             return Err("Cannot spend while wallet is locked".to_string());
         }
@@ -1232,14 +1234,18 @@ impl LightWallet {
         if tos.len() == 0 {
             return Err("Need at least one destination address".to_string());
         }
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("creating transaction".to_string());
         let total_value = tos.iter().map(|to| to.1).sum::<u64>();
         println!(
             "0: Creating transaction sending {} ztoshis to {} addresses",
             total_value,
             tos.len()
         );
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("convert address".to_string());
         // Convert address (str) to RecepientAddress and value to Amount
         let recipients = tos
             .iter()
@@ -1262,7 +1268,9 @@ impl LightWallet {
             })
             .collect::<Result<Vec<(address::RecipientAddress, Amount, Option<String>)>, String>>(
             )?;
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("select notes".to_string());
         // Select notes to cover the target value
         println!("{}: Selecting notes", now() - start_time);
 
@@ -1271,7 +1279,9 @@ impl LightWallet {
             Some(h) => BlockHeight::from_u32(h),
             None => return Err("No blocks in wallet to target, please sync first".to_string()),
         };
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("create map".to_string());
         // Create a map from address -> sk for all taddrs, so we can spend from the
         // right address
         let address_to_sk = self
@@ -1314,7 +1324,9 @@ impl LightWallet {
             orchard_notes.len(),
             utxos.len()
         );
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("add all tinputs".to_string());
         // Add all tinputs
         utxos
             .iter()
@@ -1375,7 +1387,9 @@ impl LightWallet {
                 return Err(e);
             }
         }
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("send change".to_string());
         //TODO: Send change to orchard instead of sapling
         // If no Sapling notes were added, add the change address manually. That is,
         // send the change to our sapling address manually. Note that if a sapling note was spent,
@@ -1399,7 +1413,9 @@ impl LightWallet {
                     .clone(),
             );
         }
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("encrypt outgoing".to_string());
         // We'll use the first ovk to encrypt outgoing transactions
         let sapling_ovk = zcash_primitives::keys::OutgoingViewingKey::from(
             &*self.unified_spend_capability().read().await,
@@ -1461,7 +1477,9 @@ impl LightWallet {
                 return Err(e);
             }
         }
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("setup channel and thread".to_string());
         // Set up a channel to recieve updates on the progress of building the transaction.
         let (transmitter, receiver) = channel::<Progress>();
         let progress = self.send_progress.clone();
@@ -1489,7 +1507,9 @@ impl LightWallet {
             p.progress = 0;
             p.total = sapling_notes.len() as u32 + total_z_recipients;
         }
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("build transaction".to_string());
         println!("{}: Building transaction", now() - start_time);
 
         builder.with_progress_notifier(transmitter);
@@ -1502,7 +1522,9 @@ impl LightWallet {
                 return Err(e);
             }
         };
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("wait".to_string());
         // Wait for all the progress to be updated
         progress_handle.await.unwrap();
 
@@ -1512,13 +1534,17 @@ impl LightWallet {
         {
             self.send_progress.write().await.is_send_in_progress = false;
         }
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("create transaction bytes".to_string());
         // Create the transaction bytes
         let mut raw_transaction = vec![];
         transaction.write(&mut raw_transaction).unwrap();
 
         let transaction_id = broadcast_fn(raw_transaction.clone().into_boxed_slice()).await?;
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("mark notes as spent".to_string());
         // Mark notes as spent.
         {
             // Mark sapling notes as unconfirmed spent
@@ -1564,7 +1590,9 @@ impl LightWallet {
                 spent_utxo.unconfirmed_spent = Some((transaction.txid(), u32::from(target_height)));
             }
         }
+        timers.stop_timer(timer);
 
+        let timer = TaskTimers::create_timer("add to mempool".to_string());
         // Add this transaction to the mempool structure
         {
             let price = self.price.read().await.clone();
@@ -1579,6 +1607,8 @@ impl LightWallet {
                 )
                 .await;
         }
+        timers.stop_timer(timer);
+        timers.info();
 
         Ok((transaction_id, raw_transaction))
     }
