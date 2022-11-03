@@ -476,8 +476,7 @@ impl LightClient {
     }
     pub fn init_logging(&self) -> io::Result<()> {
         // Configure logging first.
-        let log_config = self.config.get_log_config()?;
-        log4rs::init_config(log_config).map_err(|e| std::io::Error::new(ErrorKind::Other, e))?;
+        tracing_subscriber::fmt::init();
 
         Ok(())
     }

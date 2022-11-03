@@ -206,10 +206,12 @@ impl LightWallet {
         let mnemonic = if seed_phrase.is_none() {
             let mut seed_bytes = [0u8; 32];
             // Create a random seed.
+            info!("Seed is random");
             let mut system_rng = OsRng;
             system_rng.fill(&mut seed_bytes);
             Mnemonic::from_entropy(seed_bytes)
         } else {
+            info!("Seed from phrase {}", seed_phrase.clone().unwrap());
             Mnemonic::from_phrase(seed_phrase.unwrap().as_str())
         }
         .map_err(|e| {
@@ -217,6 +219,7 @@ impl LightWallet {
             //error!("{}", e);
             Error::new(ErrorKind::InvalidData, e)
         })?;
+        info!("Mnemonic generated is {}", mnemonic.to_string());
         let mut usc = UnifiedSpendCapability::new_from_phrase(&config, &mnemonic, 0)
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
         usc.new_address(ReceiverSelection {

@@ -5,6 +5,7 @@ use std::{
 
 use bip0039::Mnemonic;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use log::info;
 use orchard::keys::Scope;
 
 use zcash_client_backend::address::UnifiedAddress;
@@ -207,6 +208,7 @@ impl UnifiedSpendCapability {
         // The seed bytes is the raw entropy. To pass it to HD wallet generation,
         // we need to get the 64 byte bip39 entropy
         let bip39_seed = seed_phrase.to_seed("");
+        info!("Seed bytes are {:?}", bip39_seed);
         Ok(Self::new_from_seed(config, &bip39_seed, position))
     }
 

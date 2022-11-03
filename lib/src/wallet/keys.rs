@@ -1,6 +1,7 @@
 //! In all cases in this file "external_version" refers to a serialization version that is interpreted
 //! from a source outside of the code-base e.g. a wallet-file.
 use base58::{FromBase58, ToBase58};
+use log::info;
 use ripemd160::Digest;
 use sha2::Sha256;
 use std::io::{self, ErrorKind};
@@ -88,6 +89,8 @@ pub fn get_zaddr_from_bip39seed(
     pos: u32,
 ) -> (ExtendedSpendingKey, ExtendedFullViewingKey, PaymentAddress) {
     assert_eq!(bip39_seed.len(), 64);
+    info!("Position {pos}");
+    info!("Cointype {}", config.get_coin_type());
 
     let extsk: ExtendedSpendingKey = ExtendedSpendingKey::from_path(
         &ExtendedSpendingKey::master(bip39_seed),
