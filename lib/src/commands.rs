@@ -14,6 +14,13 @@ lazy_static! {
     static ref RT: Runtime = tokio::runtime::Runtime::new().unwrap();
 }
 
+macro_rules! build_command {
+    () => {
+        struct FooCommand {}
+    };
+}
+
+build_command!();
 pub trait Command {
     fn help(&self) -> String;
 
