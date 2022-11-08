@@ -477,6 +477,10 @@ fn dispatch_command_or_start_interactive(cli_config: &ConfigTemplate) {
         resp_receiver.recv().unwrap();
     }
 }
+/// First assemble the configuration based on the data on disk and
+/// the options parsed in from arguments.
+/// then either dispatch the command, or start an interactive session
+/// depending on the received configuration.
 pub fn run_cli() {
     let cli_config = ConfigTemplate::fill(build_clap_app()).unwrap();
     dispatch_command_or_start_interactive(&cli_config);
