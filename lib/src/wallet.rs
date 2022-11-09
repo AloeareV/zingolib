@@ -1340,7 +1340,7 @@ impl LightWallet {
         let orchard_ovk =
             orchard::keys::OutgoingViewingKey::from(&*self.unified_spend_capability().read().await);
 
-        let mut total_z_recipients = 0u32;
+        let mut total_shielded_recipients = 0u32;
         for (recipient_address, value, memo) in recipients {
             // Compute memo if it exists
             let validated_memo = match memo {
@@ -1362,7 +1362,7 @@ impl LightWallet {
 
             if let Err(e) = match recipient_address {
                 address::RecipientAddress::Shielded(to) => {
-                    total_z_recipients += 1;
+                    total_shielded_recipients += 1;
                     builder.add_sapling_output(Some(sapling_ovk), to.clone(), value, validated_memo)
                 }
                 address::RecipientAddress::Transparent(to) => {
@@ -1370,6 +1370,7 @@ impl LightWallet {
                 }
                 address::RecipientAddress::Unified(ua) => {
                     if let Some(orchard_addr) = ua.orchard() {
+                        total_shielded_recipients += 1;
                         builder.add_orchard_output(
                             Some(orchard_ovk.clone()),
                             orchard_addr.clone(),
@@ -1377,7 +1378,7 @@ impl LightWallet {
                             validated_memo,
                         )
                     } else if let Some(sapling_addr) = ua.sapling() {
-                        total_z_recipients += 1;
+                        total_shielded_recipients += 1;
                         builder.add_sapling_output(
                             Some(sapling_ovk),
                             sapling_addr.clone(),
@@ -1420,7 +1421,8 @@ impl LightWallet {
             let mut p = self.send_progress.write().await;
             p.is_send_in_progress = true;
             p.progress = 0;
-            p.total = sapling_notes.len() as u32 + total_z_recipients;
+            p.total =
+                sapling_notes.len() as u32 + total_shielded_recipients + orchard_notes.len() as u32;
         }
 
         println!("{}: Building transaction", now() - start_time);
