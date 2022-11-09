@@ -36,7 +36,8 @@ use super::{fixed_size_buffer::FixedSizeBuffer, sync_status::SyncStatus};
 type Node<D> =
     <<D as DomainWalletExt<zingoconfig::ChainType>>::WalletNote as ReceivedNoteAndMetadata>::Node;
 
-pub struct BlockAndWitnessData {
+///  The
+pub struct BatchSynchronizationState {
     // List of all downloaded blocks in the current batch and
     // their hashes/commitment trees. Stored with the tallest
     // block first, and the shortest last.
@@ -68,7 +69,7 @@ pub struct BlockAndWitnessData {
     orchard_activation_height: u64,
 }
 
-impl BlockAndWitnessData {
+impl BatchSynchronizationState {
     pub fn new(config: &ZingoConfig, sync_status: Arc<RwLock<SyncStatus>>) -> Self {
         Self {
             blocks_in_current_batch: Arc::new(RwLock::new(vec![])),
@@ -949,7 +950,7 @@ mod test {
 
     #[tokio::test]
     async fn setup_finish_simple() {
-        let mut nw = BlockAndWitnessData::new_with_batchsize(
+        let mut nw = BatchSynchronizationState::new_with_batchsize(
             &ZingoConfig::create_unconnected(ChainType::FakeMainnet, None),
             25_000,
         );
@@ -966,7 +967,7 @@ mod test {
 
     #[tokio::test]
     async fn verify_block_and_witness_data_blocks_order() {
-        let mut scenario_bawd = BlockAndWitnessData::new_with_batchsize(
+        let mut scenario_bawd = BatchSynchronizationState::new_with_batchsize(
             &ZingoConfig::create_unconnected(ChainType::FakeMainnet, None),
             25_000,
         );
@@ -999,7 +1000,7 @@ mod test {
 
     #[tokio::test]
     async fn setup_finish_large() {
-        let mut nw = BlockAndWitnessData::new_with_batchsize(
+        let mut nw = BatchSynchronizationState::new_with_batchsize(
             &ZingoConfig::create_unconnected(ChainType::FakeMainnet, None),
             25_000,
         );
@@ -1031,7 +1032,7 @@ mod test {
         let end_block = blocks.last().unwrap().height;
 
         let sync_status = Arc::new(RwLock::new(SyncStatus::default()));
-        let mut nw = BlockAndWitnessData::new(&config, sync_status);
+        let mut nw = BatchSynchronizationState::new(&config, sync_status);
         nw.setup_sync(vec![], None).await;
 
         let (reorg_transmitter, mut reorg_receiver) = unbounded_channel();
@@ -1082,7 +1083,7 @@ mod test {
         let start_block = blocks.first().unwrap().height;
         let end_block = blocks.last().unwrap().height;
 
-        let mut nw = BlockAndWitnessData::new_with_batchsize(&config, 25);
+        let mut nw = BatchSynchronizationState::new_with_batchsize(&config, 25);
         nw.setup_sync(existing_blocks, None).await;
 
         let (reorg_transmitter, mut reorg_receiver) = unbounded_channel();
@@ -1180,7 +1181,7 @@ mod test {
         let end_block = blocks.last().unwrap().height;
 
         let sync_status = Arc::new(RwLock::new(SyncStatus::default()));
-        let mut nw = BlockAndWitnessData::new(&config, sync_status);
+        let mut nw = BatchSynchronizationState::new(&config, sync_status);
         nw.setup_sync(existing_blocks, None).await;
 
         let (reorg_transmitter, mut reorg_receiver) = unbounded_channel();

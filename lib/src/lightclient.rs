@@ -1,6 +1,6 @@
 use crate::{
     blaze::{
-        block_witness_data::BlockAndWitnessData, fetch_compact_blocks::FetchCompactBlocks,
+        block_witness_data::BatchSynchronizationState, fetch_compact_blocks::FetchCompactBlocks,
         fetch_full_transaction::TransactionContext,
         fetch_taddr_transactions::FetchTaddrTransactions, sync_status::SyncStatus,
         syncdata::BlazeSyncData, trial_decryptions::TrialDecryptions, update_notes::UpdateNotes,
@@ -388,7 +388,8 @@ impl LightClient {
     }
 
     /// The wallet this fn associates with the lightclient is specifically derived from
-    /// a spend authority.
+    /// a spend authority. Note this function does _not_ update the created wallet based
+    /// on blockchain hosted information.
     pub fn create_with_seedorkey_wallet(
         key_or_seedphrase: String,
         config: &ZingoConfig,
@@ -1228,7 +1229,7 @@ impl LightClient {
                 warn!("One block reorg at height {}", last_scanned_height);
                 // This is a one-block reorg, so pop the last block. Even if there are more blocks to reorg, this is enough
                 // to trigger a sync, which will then reorg the remaining blocks
-                BlockAndWitnessData::invalidate_block(
+                BatchSynchronizationState::invalidate_block(
                     last_scanned_height,
                     self.wallet.blocks.clone(),
                     self.wallet

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use http::Uri;
 use tokio::sync::RwLock;
 
-use super::{block_witness_data::BlockAndWitnessData, sync_status::SyncStatus};
+use super::{block_witness_data::BatchSynchronizationState, sync_status::SyncStatus};
 use crate::compact_formats::TreeState;
 use crate::wallet::data::BlockData;
 use crate::wallet::WalletOptions;
@@ -11,7 +11,7 @@ use zingoconfig::ZingoConfig;
 
 pub struct BlazeSyncData {
     pub(crate) sync_status: Arc<RwLock<SyncStatus>>,
-    pub(crate) block_data: BlockAndWitnessData,
+    pub(crate) block_data: BatchSynchronizationState,
     uri: Arc<std::sync::RwLock<Uri>>,
     pub(crate) wallet_options: WalletOptions,
 }
@@ -23,7 +23,7 @@ impl BlazeSyncData {
         Self {
             sync_status: sync_status.clone(),
             uri: config.server_uri.clone(),
-            block_data: BlockAndWitnessData::new(config, sync_status),
+            block_data: BatchSynchronizationState::new(config, sync_status),
             wallet_options: WalletOptions::default(),
         }
     }
