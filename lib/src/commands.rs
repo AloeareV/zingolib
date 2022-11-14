@@ -1199,7 +1199,7 @@ impl Command for TestBipCommand {
             Mnemonic::from_entropy(mnemonic.entropy()).unwrap();
         log::info!(
             "Mnemonic:\n    Original: {}\n    First Step: {} \n    Second Step: {}\n\
-            Seed:\n    First Step: {}\n    Second Step: {}",
+            Seed:\n    First Step: {:?}\n    Second Step: {:?}",
             phrase,
             mnemonic.phrase(),
             mnemonic_after_entropy_alleged_noop.phrase(),
@@ -1212,6 +1212,15 @@ impl Command for TestBipCommand {
             mnemonic.to_seed(""),
             mnemonic_after_entropy_alleged_noop.to_seed("")
         );
+        format!(
+            "Mnemonic:\n    Original: {}\n    First Step: {} \n    Second Step: {}\n\
+            Seed:\n    First Step: {:?}\n    Second Step: {:?}",
+            phrase,
+            mnemonic.phrase(),
+            mnemonic_after_entropy_alleged_noop.phrase(),
+            mnemonic.to_seed(""),
+            mnemonic_after_entropy_alleged_noop.to_seed("")
+        )
     }
 }
 
@@ -1304,7 +1313,7 @@ pub fn get_commands() -> Box<HashMap<String, Box<dyn Command>>> {
         "updatecurrentprice".to_string(),
         Box::new(UpdateCurrentPriceCommand {}),
     );
-    map.insert("testbip".to_string(), TestBipCommand {});
+    map.insert("testbip".to_string(), Box::new(TestBipCommand {}));
     map.insert("send".to_string(), Box::new(SendCommand {}));
     map.insert("shield".to_string(), Box::new(ShieldCommand {}));
     map.insert("save".to_string(), Box::new(SaveCommand {}));
