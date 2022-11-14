@@ -12,13 +12,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aead"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c192eb8f11fc081b0fe4259ba5af04217d4e0faddd02417310a927911abd7c8"
+dependencies = [
+ "crypto-common",
+ "generic-array",
+]
+
+[[package]]
 name = "aes"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e8b47f52ea9bae42228d07ec09eb676433d7c4ed1ebdf0f1d1c29ed446f1ab8"
 dependencies = [
  "cfg-if",
- "cipher",
+ "cipher 0.3.0",
  "cpufeatures",
  "opaque-debug",
 ]
@@ -333,7 +343,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cb03d1bed155d89dce0f845b7899b18a9a163e148fd004e1c28421a783e2d8e"
 dependencies = [
  "block-padding",
- "cipher",
+ "cipher 0.3.0",
 ]
 
 [[package]]
@@ -411,9 +421,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c80e5460aa66fe3b91d40bcbdab953a597b60053e34d684ac6903f863b680a6"
 dependencies = [
  "cfg-if",
- "cipher",
+ "cipher 0.3.0",
  "cpufeatures",
  "zeroize",
+]
+
+[[package]]
+name = "chacha20"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7fc89c7c5b9e7a02dfe45cd2367bae382f9ed31c61ca8debe5f827c420a2f08"
+dependencies = [
+ "cfg-if",
+ "cipher 0.4.3",
+ "cpufeatures",
 ]
 
 [[package]]
@@ -422,10 +443,23 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a18446b09be63d457bbec447509e85f662f32952b035ce892290396bc0b0cff5"
 dependencies = [
- "aead",
- "chacha20",
- "cipher",
- "poly1305",
+ "aead 0.4.3",
+ "chacha20 0.8.2",
+ "cipher 0.3.0",
+ "poly1305 0.7.2",
+ "zeroize",
+]
+
+[[package]]
+name = "chacha20poly1305"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35"
+dependencies = [
+ "aead 0.5.1",
+ "chacha20 0.9.0",
+ "cipher 0.4.3",
+ "poly1305 0.8.0",
  "zeroize",
 ]
 
@@ -451,6 +485,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ee52072ec15386f770805afd189a01c8841be8696bed250fa2f13c4c0d6dfb7"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "cipher"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1873270f8f7942c191139cb8a40fd228da6c3fd2fc376d7e92d47aa14aeb59e"
+dependencies = [
+ "crypto-common",
+ "inout",
+ "zeroize",
 ]
 
 [[package]]
@@ -735,6 +780,15 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 [[package]]
 name = "equihash"
 version = "0.2.0"
+source = "git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac#2c2e773a04a653e11b3999e8df8596c96d476bac"
+dependencies = [
+ "blake2b_simd",
+ "byteorder",
+]
+
+[[package]]
+name = "equihash"
+version = "0.2.0"
 source = "git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346#d66f7f70516e6da5c24008874a926d41221b1346"
 dependencies = [
  "blake2b_simd",
@@ -770,6 +824,14 @@ checksum = "64f18991e7bf11e7ffee451b5318b5c1a73c52d0d0ada6e5a3017c8c1ced6a21"
 dependencies = [
  "libc",
  "str-buf",
+]
+
+[[package]]
+name = "f4jumble"
+version = "0.1.0"
+source = "git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac#2c2e773a04a653e11b3999e8df8596c96d476bac"
+dependencies = [
+ "blake2b_simd",
 ]
 
 [[package]]
@@ -855,7 +917,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd910db5f9ca4dc3116f8c46367825807aa2b942f72565f16b4be0b208a00a9e"
 dependencies = [
  "block-modes",
- "cipher",
+ "cipher 0.3.0",
  "libm",
  "num-bigint",
  "num-integer",
@@ -986,12 +1048,12 @@ dependencies = [
 
 [[package]]
 name = "group"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7391856def869c1c81063a03457c676fbcd419709c3dfb33d8d319de484b154d"
+checksum = "5dfbfb3a6cfbd390d5c9564ab283a0349b9b9fcd46a706c1eb10e0db70bfbac7"
 dependencies = [
- "byteorder",
  "ff",
+ "memuse",
  "rand_core 0.6.3",
  "subtle",
 ]
@@ -1266,6 +1328,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inout"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0c10553d664a4d0bcff9f4215d0aac67a639cc68ef660840afe309b807bc9f5"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1462,9 +1533,9 @@ dependencies = [
 
 [[package]]
 name = "memuse"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f69d25cd7528769ad3d897e99eb942774bff8b23165012af490351a44c5b583b"
+checksum = "2145869435ace5ea6ea3d35f59be559317ec9a0d04e1812d5f185a87b6d36f1a"
 dependencies = [
  "nonempty",
 ]
@@ -1655,7 +1726,8 @@ dependencies = [
 [[package]]
 name = "orchard"
 version = "0.2.0"
-source = "git+https://github.com/zingolabs/orchard?rev=49874b31da4fedcb31fcfadf5ba8804bf860c4bf#49874b31da4fedcb31fcfadf5ba8804bf860c4bf"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7619db7f917afd9b1139044c595fab1b6166de2db62317794b5f5e34a2104ae1"
 dependencies = [
  "aes",
  "bitvec",
@@ -1677,7 +1749,35 @@ dependencies = [
  "serde",
  "subtle",
  "tracing",
- "zcash_note_encryption",
+ "zcash_note_encryption 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+]
+
+[[package]]
+name = "orchard"
+version = "0.3.0"
+source = "git+https://github.com/zingolabs/orchard?rev=d05b6cee9df7c4019509e2f54899b5979fb641b5#d05b6cee9df7c4019509e2f54899b5979fb641b5"
+dependencies = [
+ "aes",
+ "bitvec",
+ "blake2b_simd",
+ "ff",
+ "fpe",
+ "group",
+ "halo2_gadgets",
+ "halo2_proofs",
+ "hex 0.4.3",
+ "incrementalmerkletree",
+ "lazy_static",
+ "memuse",
+ "nonempty",
+ "pasta_curves",
+ "proptest",
+ "rand 0.8.5",
+ "reddsa",
+ "serde",
+ "subtle",
+ "tracing",
+ "zcash_note_encryption 0.2.0",
 ]
 
 [[package]]
@@ -1835,7 +1935,18 @@ checksum = "048aeb476be11a4b6ca432ca569e375810de9294ae78f4774e78ea98a9246ede"
 dependencies = [
  "cpufeatures",
  "opaque-debug",
- "universal-hash",
+ "universal-hash 0.4.1",
+]
+
+[[package]]
+name = "poly1305"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8159bd90725d2df49889a078b54f4f79e87f1f8a8444194cdca81d38f5393abf"
+dependencies = [
+ "cpufeatures",
+ "opaque-debug",
+ "universal-hash 0.5.0",
 ]
 
 [[package]]
@@ -3294,6 +3405,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "universal-hash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d3160b73c9a19f7e2939a2fdad446c57c1bbbbf4d919d3213ff1267a580d8b5"
+dependencies = [
+ "crypto-common",
+ "subtle",
+]
+
+[[package]]
 name = "unsafe-any"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3615,12 +3736,53 @@ dependencies = [
 [[package]]
 name = "zcash_address"
 version = "0.1.0"
+source = "git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac#2c2e773a04a653e11b3999e8df8596c96d476bac"
+dependencies = [
+ "bech32 0.8.1",
+ "bs58",
+ "f4jumble 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_encoding 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+]
+
+[[package]]
+name = "zcash_address"
+version = "0.1.0"
 source = "git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346#d66f7f70516e6da5c24008874a926d41221b1346"
 dependencies = [
  "bech32 0.8.1",
  "bs58",
- "f4jumble",
- "zcash_encoding",
+ "f4jumble 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_encoding 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+]
+
+[[package]]
+name = "zcash_client_backend"
+version = "0.5.0"
+source = "git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac#2c2e773a04a653e11b3999e8df8596c96d476bac"
+dependencies = [
+ "base64",
+ "bech32 0.8.1",
+ "bls12_381",
+ "bs58",
+ "crossbeam-channel",
+ "ff",
+ "group",
+ "hex 0.4.3",
+ "jubjub",
+ "log",
+ "nom",
+ "orchard 0.2.0",
+ "percent-encoding",
+ "protobuf",
+ "protobuf-codegen-pure",
+ "rand_core 0.6.3",
+ "rayon",
+ "subtle",
+ "time 0.2.27",
+ "tracing",
+ "zcash_address 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_note_encryption 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
 ]
 
 [[package]]
@@ -3639,7 +3801,7 @@ dependencies = [
  "jubjub",
  "log",
  "nom",
- "orchard",
+ "orchard 0.2.0",
  "percent-encoding",
  "protobuf",
  "protobuf-codegen-pure",
@@ -3648,9 +3810,18 @@ dependencies = [
  "subtle",
  "time 0.2.27",
  "tracing",
- "zcash_address",
- "zcash_note_encryption",
- "zcash_primitives",
+ "zcash_address 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_note_encryption 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+]
+
+[[package]]
+name = "zcash_encoding"
+version = "0.1.0"
+source = "git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac#2c2e773a04a653e11b3999e8df8596c96d476bac"
+dependencies = [
+ "byteorder",
+ "nonempty",
 ]
 
 [[package]]
@@ -3665,12 +3836,74 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.1.0"
-source = "git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346#d66f7f70516e6da5c24008874a926d41221b1346"
+source = "git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac#2c2e773a04a653e11b3999e8df8596c96d476bac"
 dependencies = [
- "chacha20",
- "chacha20poly1305",
+ "chacha20 0.8.2",
+ "chacha20poly1305 0.9.1",
  "rand_core 0.6.3",
  "subtle",
+]
+
+[[package]]
+name = "zcash_note_encryption"
+version = "0.1.0"
+source = "git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346#d66f7f70516e6da5c24008874a926d41221b1346"
+dependencies = [
+ "chacha20 0.8.2",
+ "chacha20poly1305 0.9.1",
+ "rand_core 0.6.3",
+ "subtle",
+]
+
+[[package]]
+name = "zcash_note_encryption"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2be9c12532389fd03786b7068fb7936c17fade23b48f584707bdc5f79f3ec867"
+dependencies = [
+ "chacha20 0.9.0",
+ "chacha20poly1305 0.10.1",
+ "cipher 0.4.3",
+ "rand_core 0.6.3",
+ "subtle",
+]
+
+[[package]]
+name = "zcash_primitives"
+version = "0.7.0"
+source = "git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac#2c2e773a04a653e11b3999e8df8596c96d476bac"
+dependencies = [
+ "aes",
+ "bip0039 0.9.0",
+ "bitvec",
+ "blake2b_simd",
+ "blake2s_simd",
+ "bls12_381",
+ "bs58",
+ "byteorder",
+ "chacha20poly1305 0.9.1",
+ "equihash 0.2.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "ff",
+ "fpe",
+ "group",
+ "hdwallet",
+ "hex 0.4.3",
+ "incrementalmerkletree",
+ "jubjub",
+ "lazy_static",
+ "memuse",
+ "nonempty",
+ "orchard 0.3.0",
+ "proptest",
+ "rand 0.8.5",
+ "rand_core 0.6.3",
+ "ripemd",
+ "secp256k1",
+ "sha2 0.9.9",
+ "subtle",
+ "zcash_address 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_encoding 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_note_encryption 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
 ]
 
 [[package]]
@@ -3686,8 +3919,8 @@ dependencies = [
  "bls12_381",
  "bs58",
  "byteorder",
- "chacha20poly1305",
- "equihash",
+ "chacha20poly1305 0.9.1",
+ "equihash 0.2.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
  "ff",
  "fpe",
  "group",
@@ -3698,7 +3931,7 @@ dependencies = [
  "lazy_static",
  "memuse",
  "nonempty",
- "orchard",
+ "orchard 0.2.0",
  "proptest",
  "rand 0.8.5",
  "rand_core 0.6.3",
@@ -3706,9 +3939,29 @@ dependencies = [
  "secp256k1",
  "sha2 0.9.9",
  "subtle",
- "zcash_address",
- "zcash_encoding",
- "zcash_note_encryption",
+ "zcash_address 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_encoding 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_note_encryption 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+]
+
+[[package]]
+name = "zcash_proofs"
+version = "0.7.1"
+source = "git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac#2c2e773a04a653e11b3999e8df8596c96d476bac"
+dependencies = [
+ "bellman",
+ "blake2b_simd",
+ "bls12_381",
+ "byteorder",
+ "directories",
+ "ff",
+ "group",
+ "jubjub",
+ "lazy_static",
+ "rand_core 0.6.3",
+ "redjubjub",
+ "tracing",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
 ]
 
 [[package]]
@@ -3728,7 +3981,7 @@ dependencies = [
  "rand_core 0.6.3",
  "redjubjub",
  "tracing",
- "zcash_primitives",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
 ]
 
 [[package]]
@@ -3768,8 +4021,8 @@ dependencies = [
  "tempdir",
  "tokio",
  "tracing-subscriber",
- "zcash_client_backend",
- "zcash_primitives",
+ "zcash_client_backend 0.5.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
  "zingoconfig 0.1.0",
  "zingolib 0.2.0",
  "zingolib 0.2.0 (git+https://github.com/zingolabs/zingolib?rev=f8fb624237fd4923512cc065620b55230676ab82)",
@@ -3783,8 +4036,8 @@ dependencies = [
  "http",
  "log",
  "log4rs",
- "zcash_address",
- "zcash_primitives",
+ "zcash_address 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
 ]
 
 [[package]]
@@ -3796,8 +4049,8 @@ dependencies = [
  "http",
  "log",
  "log4rs",
- "zcash_address",
- "zcash_primitives",
+ "zcash_address 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
 ]
 
 [[package]]
@@ -3827,7 +4080,7 @@ dependencies = [
  "log",
  "log4rs",
  "nonempty",
- "orchard",
+ "orchard 0.3.0",
  "pairing",
  "portpicker",
  "prost",
@@ -3853,12 +4106,12 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "webpki-roots 0.21.1",
- "zcash_address",
- "zcash_client_backend",
- "zcash_encoding",
- "zcash_note_encryption",
- "zcash_primitives",
- "zcash_proofs",
+ "zcash_address 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_client_backend 0.5.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_encoding 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_note_encryption 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
+ "zcash_proofs 0.7.1 (git+https://github.com/zingolabs/librustzcash?rev=2c2e773a04a653e11b3999e8df8596c96d476bac)",
  "zingoconfig 0.1.0",
 ]
 
@@ -3889,7 +4142,7 @@ dependencies = [
  "log",
  "log4rs",
  "nonempty",
- "orchard",
+ "orchard 0.2.0",
  "pairing",
  "prost",
  "rand 0.8.5",
@@ -3913,11 +4166,11 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "webpki-roots 0.21.1",
- "zcash_address",
- "zcash_client_backend",
- "zcash_encoding",
- "zcash_note_encryption",
- "zcash_primitives",
- "zcash_proofs",
+ "zcash_address 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_client_backend 0.5.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_encoding 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_note_encryption 0.1.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_primitives 0.7.0 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
+ "zcash_proofs 0.7.1 (git+https://github.com/zingolabs/librustzcash?rev=d66f7f70516e6da5c24008874a926d41221b1346)",
  "zingoconfig 0.1.0 (git+https://github.com/zingolabs/zingolib?rev=f8fb624237fd4923512cc065620b55230676ab82)",
 ]
