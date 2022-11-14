@@ -1181,6 +1181,40 @@ impl Command for NotesCommand {
     }
 }
 
+struct TestBipCommand {}
+impl Command for TestBipCommand {
+    fn help(&self) -> String {
+        "runs some development tests about bip0039 functionality".to_string()
+    }
+
+    fn short_help(&self) -> String {
+        "runs some development tests about bip0039 functionality".to_string()
+    }
+
+    fn exec(&self, _args: &[&str], lightclient: &LightClient) -> String {
+        use zcash_primitives::zip339::Mnemonic;
+        let phrase = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
+        let mnemonic = Mnemonic::from_phrase(phrase).unwrap();
+        let mnemonic_after_entropy_alleged_noop =
+            Mnemonic::from_entropy(mnemonic.entropy()).unwrap();
+        log::info!(
+            "Mnemonic:\n    Original: {}\n    First Step: {} \n    Second Step: {}\n\
+            Seed:\n    First Step: {}\n    Second Step: {}",
+            phrase,
+            mnemonic.phrase(),
+            mnemonic_after_entropy_alleged_noop.phrase(),
+            mnemonic.to_seed(""),
+            mnemonic_after_entropy_alleged_noop.to_seed("")
+        );
+        assert_eq!(mnemonic.phrase(), phrase);
+        assert_eq!(mnemonic_after_entropy_alleged_noop.phrase(), phrase);
+        assert_eq!(
+            mnemonic.to_seed(""),
+            mnemonic_after_entropy_alleged_noop.to_seed("")
+        );
+    }
+}
+
 struct QuitCommand {}
 impl Command for QuitCommand {
     fn help(&self) -> String {
@@ -1270,6 +1304,7 @@ pub fn get_commands() -> Box<HashMap<String, Box<dyn Command>>> {
         "updatecurrentprice".to_string(),
         Box::new(UpdateCurrentPriceCommand {}),
     );
+    map.insert("testbip".to_string(), TestBipCommand {});
     map.insert("send".to_string(), Box::new(SendCommand {}));
     map.insert("shield".to_string(), Box::new(ShieldCommand {}));
     map.insert("save".to_string(), Box::new(SaveCommand {}));
