@@ -11,7 +11,7 @@ pub mod lightclient;
 pub mod wallet;
 
 #[cfg(not(target_os = "android"))]
-compile_error!("target_os is android");
+compile_error!("target_os is not android");
 
 #[cfg(feature = "embed_params")]
 #[derive(RustEmbed)]
