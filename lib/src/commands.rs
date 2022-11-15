@@ -1191,9 +1191,12 @@ impl Command for TestBipCommand {
         "runs some development tests about bip0039 functionality".to_string()
     }
 
-    fn exec(&self, _args: &[&str], lightclient: &LightClient) -> String {
+    fn exec(&self, args: &[&str], _lightclient: &LightClient) -> String {
         use zcash_primitives::zip339::Mnemonic;
-        let phrase = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
+        let phrase = match args.get(0) {
+            Some(s) => s,
+            None => "bottom drive obey lake curtain smoke basket hold race lonely fit walk",
+        };
         let mnemonic = Mnemonic::from_phrase(phrase).unwrap();
         let mnemonic_after_entropy_alleged_noop =
             Mnemonic::from_entropy(mnemonic.entropy()).unwrap();
