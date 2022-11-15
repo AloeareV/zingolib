@@ -10,6 +10,9 @@ pub mod grpc_connector;
 pub mod lightclient;
 pub mod wallet;
 
+#[cfg(target_os = "android")]
+compile_err!("target_os is android");
+
 #[cfg(feature = "embed_params")]
 #[derive(RustEmbed)]
 #[folder = "zcash-params/"]
