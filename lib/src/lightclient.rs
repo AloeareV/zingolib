@@ -752,6 +752,7 @@ impl LightClient {
                                 "spent_at_height"    => utxo.spent_at_height,
                                 "spent"              => utxo.spent.map(|spent_transaction_id| format!("{}", spent_transaction_id)),
                                 "unconfirmed_spent"  => utxo.unconfirmed_spent.map(|(spent_transaction_id, _)| format!("{}", spent_transaction_id)),
+                                "output_index"       => utxo.output_index,
                             })
                         }
                     )
