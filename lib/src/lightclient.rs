@@ -687,7 +687,7 @@ impl LightClient {
                         } else {
                             let address = LightWallet::note_address::<OrchardDomain>(&self.config.chain, orch_note_metadata, &unified_spend_auth);
                             let spendable = transaction_metadata.block_height <= anchor_height && orch_note_metadata.spent.is_none() && orch_note_metadata.unconfirmed_spent.is_none();
-
+                            let witness = orch_note_metadata.witnesses.last().unwrap();
                             let created_block:u32 = transaction_metadata.block_height.into();
                             Some(object!{
                                 "created_in_block"   => created_block,
@@ -701,6 +701,13 @@ impl LightClient {
                                 "spent"              => orch_note_metadata.spent.map(|(spent_transaction_id, _)| format!("{}", spent_transaction_id)),
                                 "spent_at_height"    => orch_note_metadata.spent.map(|(_, h)| h),
                                 "unconfirmed_spent"  => orch_note_metadata.unconfirmed_spent.map(|(spent_transaction_id, _)| format!("{}", spent_transaction_id)),
+                                "note_rho"             => hex::encode(&orch_note_metadata.note.rho().to_bytes()),
+                                "note_rseed"           => hex::encode(orch_note_metadata.note.rseed().as_bytes()),
+                                "merkle_tree_position" => witness.position(),
+                                "merkle_tree_path"     => witness.path().unwrap().auth_path
+                                    .iter()
+                                    .map(|(node, _)| hex::encode(&node.to_bytes()))
+                                    .collect::<Vec<String>>(),
                             })
                         }
                     )
