@@ -701,6 +701,7 @@ impl LightClient {
                                 "spent"              => orch_note_metadata.spent.map(|(spent_transaction_id, _)| format!("{}", spent_transaction_id)),
                                 "spent_at_height"    => orch_note_metadata.spent.map(|(_, h)| h),
                                 "unconfirmed_spent"  => orch_note_metadata.unconfirmed_spent.map(|(spent_transaction_id, _)| format!("{}", spent_transaction_id)),
+                                "note_recipient"       => hex::encode(&orch_note_metadata.note.recipient().to_raw_address_bytes()),
                                 "note_rho"             => hex::encode(&orch_note_metadata.note.rho().to_bytes()),
                                 "note_rseed"           => hex::encode(orch_note_metadata.note.rseed().as_bytes()),
                                 "merkle_tree_position" => witness.position(),
@@ -708,6 +709,7 @@ impl LightClient {
                                     .iter()
                                     .map(|(node, _)| hex::encode(&node.to_bytes()))
                                     .collect::<Vec<String>>(),
+                                "merkle_tree_root"     => hex::encode(&witness.root().to_bytes()),
                             })
                         }
                     )
