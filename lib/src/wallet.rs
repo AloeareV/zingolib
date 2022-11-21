@@ -32,7 +32,6 @@ use zcash_primitives::merkle_tree::CommitmentTree;
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::SaplingIvk;
 use zcash_primitives::transaction::builder::Progress;
-use zcash_primitives::transaction::components::orchard::builder::WithOrchard;
 use zcash_primitives::transaction::fees::zip317;
 use zcash_primitives::transaction::fees::zip317::FeeError;
 use zcash_primitives::transaction::fees::FeeRule;
@@ -1201,11 +1200,7 @@ impl LightWallet {
         let orchard_anchor = self
             .get_orchard_anchor(&orchard_notes, target_height)
             .await?;
-        let mut builder = Builder::with_orchard_anchor(
-            self.transaction_context.config.chain,
-            target_height,
-            orchard_anchor,
-        );
+        let mut builder = Builder::new(self.transaction_context.config.chain, target_height);
         println!(
             "{}: Adding {} sapling notes, {} orchard notes, and {} utxos",
             now() - start_time,
@@ -1257,21 +1252,6 @@ impl LightWallet {
             }
         }
 
-        for selected in orchard_notes.iter() {
-            println!("Adding orchard spend");
-            if let Err(e) = builder
-                .add_orchard_spend::<zcash_primitives::transaction::fees::zip317::FeeRule>(
-                    selected.spend_key.clone(),
-                    selected.note.clone(),
-                    orchard_witness_to_merkle_path(&selected.witness),
-                )
-            {
-                let e = format!("Error adding note: {:?}", e);
-                error!("{}", e);
-                return Err(e);
-            }
-        }
-
         // We'll use the first ovk to encrypt outgoing transactions
         let sapling_ovk = zcash_primitives::keys::OutgoingViewingKey::from(
             &*self.unified_spend_capability().read().await,
@@ -1313,15 +1293,7 @@ impl LightWallet {
                     .add_transparent_output(&to, *value)
                     .map_err(zcash_primitives::transaction::builder::Error::TransparentBuild),
                 address::RecipientAddress::Unified(ua) => {
-                    if let Some(orchard_addr) = ua.orchard() {
-                        total_o_recipients += 1;
-                        builder.add_orchard_output::<zcash_primitives::transaction::fees::zip317::FeeRule>(
-                            Some(orchard_ovk.clone()),
-                            orchard_addr.clone(),
-                            u64::from(*value),
-                            validated_memo,
-                        )
-                    } else if let Some(sapling_addr) = ua.sapling() {
+                    if let Some(sapling_addr) = ua.sapling() {
                         total_z_recipients += 1;
                         builder
                             .add_sapling_output(
@@ -1357,10 +1329,6 @@ impl LightWallet {
                     n => n,
                 },
                 match builder.sapling_outputs().len() {
-                    1 => 2,
-                    n => n,
-                },
-                match max(orchard_notes.len(), total_o_recipients + 1) {
                     1 => 2,
                     n => n,
                 },
@@ -1401,29 +1369,15 @@ impl LightWallet {
                                 1 => 2,
                                 n => n,
                             },
-                            match max(orchard_notes.len(), total_o_recipients + 1) {
-                                1 => 2,
-                                n => n,
-                            },
                         )
                         .map_err(|e| e.to_string())?;
                 } else {
-                    let free_input: bool = max(orchard_notes.len(), total_o_recipients)
-                        + max(sapling_notes.len(), total_z_recipients as usize)
-                        < 2
-                        || orchard_notes.len() < 2
-                        // We haven't added our orchard change output yet
-                        || orchard_notes.len() < total_o_recipients + 1;
                     if self
-                        .add_extra_orchard_note_for_fee(
-                            &mut orchard_notes,
+                        .add_extra_sapling_note_for_fee(
+                            &mut sapling_notes,
                             target_amount,
                             &mut selected_value,
-                            if free_input {
-                                fee_estimate
-                            } else {
-                                (fee_estimate + fee_rule.marginal_fee()).unwrap()
-                            },
+                            (fee_estimate + fee_rule.marginal_fee()).unwrap(),
                             &mut builder,
                         )
                         .await?
@@ -1445,58 +1399,19 @@ impl LightWallet {
                                     1 => 2,
                                     n => n,
                                 },
-                                match max(orchard_notes.len(), total_o_recipients + 1) {
-                                    1 => 2,
-                                    n => n,
-                                },
                             )
                             .map_err(|e| e.to_string())?;
                     } else {
-                        if self
-                            .add_extra_sapling_note_for_fee(
-                                &mut sapling_notes,
-                                target_amount,
-                                &mut selected_value,
-                                (fee_estimate + fee_rule.marginal_fee()).unwrap(),
-                                &mut builder,
-                            )
-                            .await?
-                            .is_some()
-                        {
-                            fee_estimate = fee_rule
-                                .fee_required(
-                                    &self.transaction_context.config.chain,
-                                    target_height,
-                                    builder.transparent_inputs(),
-                                    builder.transparent_outputs(),
-                                    // The transaction builder will arity pad, which we
-                                    // need to account for
-                                    match builder.sapling_inputs().len() {
-                                        1 => 2,
-                                        n => n,
-                                    },
-                                    match builder.sapling_outputs().len() {
-                                        1 => 2,
-                                        n => n,
-                                    },
-                                    match max(orchard_notes.len(), total_o_recipients + 1) {
-                                        1 => 2,
-                                        n => n,
-                                    },
-                                )
-                                .map_err(|e| e.to_string())?;
-                        } else {
-                            return Err(
-                                "Can't cover transaction fee with a single additional note. \
+                        return Err(
+                            "Can't cover transaction fee with a single additional note. \
                                 Either there are insufficient funds in the wallet to cover \
                                 the fee, or all remaining notes are very small. It is \
                                 possible that multiple notes could be added to cover the \
                                 fee, but as fees scale with transaction size, this could \
                                 lead to extreme fees. As such, implementing such a mechansm \
                                 is low-priority."
-                                    .to_string(),
-                            );
-                        }
+                                .to_string(),
+                        );
                     }
                 }
             }
@@ -1526,12 +1441,13 @@ impl LightWallet {
         uas_bytes[..uas_vec.len()].copy_from_slice(uas_vec.as_slice());
 
         dbg!(selected_value, target_amount, fee_estimate);
-        if let Err(e) = builder.add_orchard_output::<zip317::FeeRule>(
-            Some(orchard_ovk.clone()),
-            *self.unified_spend_capability().read().await.addresses()[0]
-                .orchard()
-                .unwrap(),
-            dbg!(u64::from(selected_value) - u64::from(target_amount) - u64::from(fee_estimate)),
+        if let Err(e) = builder.add_sapling_output(
+            Some(sapling_ovk.clone()),
+            self.unified_spend_capability().read().await.addresses()[0]
+                .sapling()
+                .unwrap()
+                .clone(),
+            dbg!(selected_value - target_amount - fee_estimate).unwrap(),
             // Here we store the uas we sent to in the memo field. We don't use these yet,
             // but they will eventually be used during rescan, to recover the full UA we sent to.
             MemoBytes::from(Memo::Arbitrary(Box::new(uas_bytes))),
@@ -1668,7 +1584,7 @@ impl LightWallet {
         target_amount: Amount,
         selected_value: &mut Amount,
         fee_estimate: Amount,
-        builder: &mut Builder<'_, zingoconfig::ChainType, OsRng, WithOrchard>,
+        builder: &mut Builder<'_, zingoconfig::ChainType, OsRng>,
     ) -> Result<Option<()>, String> {
         match self
             .get_all_domain_specific_notes::<SaplingDomain<zingoconfig::ChainType>>()
@@ -1694,46 +1610,6 @@ impl LightWallet {
                 };
                 *selected_value = (*selected_value
                     + Amount::from_u64(fee_paying_extra_note.note.value).unwrap())
-                .unwrap();
-                sapling_notes.push(fee_paying_extra_note);
-                Ok(Some(()))
-            }
-            None => Ok(None),
-        }
-    }
-
-    async fn add_extra_orchard_note_for_fee(
-        &self,
-        sapling_notes: &mut Vec<SpendableOrchardNote>,
-        target_amount: Amount,
-        selected_value: &mut Amount,
-        fee_estimate: Amount,
-        builder: &mut Builder<'_, zingoconfig::ChainType, OsRng, WithOrchard>,
-    ) -> Result<Option<()>, String> {
-        match self
-            .get_all_domain_specific_notes::<OrchardDomain>()
-            .await
-            .into_iter()
-            .filter(|spendable_note| !sapling_notes.contains(spendable_note))
-            .filter(|spendable_note| {
-                Amount::from_u64(spendable_note.note.value().inner()).unwrap()
-                    >= (fee_estimate + target_amount - *selected_value).unwrap()
-            })
-            .min_by_key(|spendable_note| {
-                Amount::from_u64(spendable_note.note.value().inner()).unwrap()
-            }) {
-            Some(fee_paying_extra_note) => {
-                if let Err(e) = builder.add_orchard_spend::<zip317::FeeRule>(
-                    fee_paying_extra_note.spend_key.clone(),
-                    fee_paying_extra_note.note.clone(),
-                    orchard_witness_to_merkle_path(&fee_paying_extra_note.witness),
-                ) {
-                    let e = format!("Error adding note: {:?}", e);
-                    error!("{}", e);
-                    return Err(e);
-                };
-                *selected_value = (*selected_value
-                    + Amount::from_u64(fee_paying_extra_note.note.value().inner()).unwrap())
                 .unwrap();
                 sapling_notes.push(fee_paying_extra_note);
                 Ok(Some(()))

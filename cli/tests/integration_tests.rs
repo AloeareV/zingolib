@@ -96,7 +96,7 @@ fn send_mined_sapling_to_orchard() {
     Runtime::new().unwrap().block_on(async {
         utils::increase_height_and_sync_client(&regtest_manager, &client, 5).await;
 
-        let o_addr = client.do_new_address("o").await.unwrap()[0].take();
+        let o_addr = client.do_new_address("zo").await.unwrap()[0].take();
         client
             .do_send(vec![(
                 o_addr.to_string().as_str(),
