@@ -312,8 +312,8 @@ impl LightClient {
         Ok(())
     }
 
-    pub async fn interrupt_sync_after_batch(&mut self) {
-        *self.continue_sync.write().await = false;
+    async fn interrupt_sync_after_batch(&self, set_interrupt: bool) {
+        *self.continue_sync.write().await = set_interrupt;
     }
 
     pub async fn get_initial_state(&self, height: u64) -> Option<(u64, String, String)> {
@@ -1587,6 +1587,7 @@ impl LightClient {
 
     //TODO: Add migrate_sapling_to_orchard argument
     pub async fn do_send(&self, addrs: Vec<(&str, u64, Option<String>)>) -> Result<String, String> {
+        self.interrupt_sync_after_batch(true).await;
         // First, get the concensus branch ID
         debug!("Creating transaction");
 
@@ -1603,6 +1604,7 @@ impl LightClient {
                 .await
         };
 
+        self.interrupt_sync_after_batch(false).await;
         result.map(|(transaction_id, _)| transaction_id)
     }
 
