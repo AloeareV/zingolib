@@ -8,11 +8,6 @@ use tokio::runtime::Runtime;
 use utils::setup::{
     basic_no_spendable, saplingcoinbasebacked_spendcapable, two_clients_one_saplingcoinbase_backed,
 };
-#[test]
-fn create_network_disconnected_client() {
-    let (_regtest_manager_1, _child_process_handler_1, _client_builder) =
-        saplingcoinbasebacked_spendcapable();
-}
 
 #[test]
 fn zcashd_sapling_commitment_tree() {

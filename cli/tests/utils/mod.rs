@@ -375,3 +375,12 @@ pub mod setup {
         )
     }
 }
+
+// We are keeping this test available to debug the test utils, but it usually doesn't
+// need to run.
+#[ignore]
+#[test]
+fn create_network_disconnected_client() {
+    let (_regtest_manager_1, _child_process_handler_1, _client_builder) =
+        setup::saplingcoinbasebacked_spendcapable();
+}
