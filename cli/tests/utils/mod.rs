@@ -1,7 +1,11 @@
 use std::{thread::sleep, time::Duration};
 
+use tokio::runtime::Runtime;
+use zcash_primitives::consensus::BlockHeight;
 use zingo_cli::regtest::RegtestManager;
 use zingolib::lightclient::LightClient;
+
+use crate::utils;
 
 async fn get_synced_wallet_height(client: &LightClient) -> u32 {
     client.do_sync(true).await.unwrap();
@@ -35,8 +39,26 @@ pub async fn increase_blockchain_height_by_n(
         count = dbg!(count + 1);
     }
 }
+
+#[ignore]
 #[test]
-fn verify_synchronous_flow_on_increase_server_height_by_n() {}
+fn verify_increase_blockchain_height_by_n() {
+    let (regtest_manager, child_process_handler, mut client_builder) =
+        setup::saplingcoinbasebacked_spendcapable();
+    let client = client_builder.new_sameseed_client(0, false);
+    Runtime::new().unwrap().block_on(async {
+        let chain_height = client.get_submission_mempool_height().await - 1;
+        assert_eq!(chain_height, BlockHeight::from_u32(1));
+        // Without sync push server forward 100 blocks
+        utils::increase_blockchain_height_by_n(&regtest_manager, &client, 99).await;
+        // Verify that blockchain is at 100
+        assert_eq!(
+            client.get_submission_mempool_height().await - 1,
+            BlockHeight::from_u32(100)
+        );
+    });
+    drop(child_process_handler);
+}
 // This function increases the chain height reliably (with polling) but
 // it _also_ ensures that the client state is synced.
 // Unsynced clients are very interesting to us.  See increate_server_height

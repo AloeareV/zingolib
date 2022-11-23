@@ -32,17 +32,8 @@ fn verify_old_wallet_uses_server_height_in_send() {
         // Ensure that the client has confirmed spendable funds
         utils::increase_height_and_sync_client(&regtest_manager, &client_sending, 5).await;
 
-        assert_eq!(
-            client_sending.get_submission_mempool_height().await - 1,
-            BlockHeight::from_u32(6)
-        );
         // Without sync push server forward 100 blocks
         utils::increase_blockchain_height_by_n(&regtest_manager, &client_sending, 94).await;
-        // Verify that blockchain is at 100
-        assert_eq!(
-            client_sending.get_submission_mempool_height().await - 1,
-            BlockHeight::from_u32(100)
-        );
         let ua = client_receiving.do_new_address("o").await.unwrap()[0].to_string();
         let client_wallet_height = client_sending.do_wallet_last_scanned_height().await;
 
@@ -149,7 +140,7 @@ fn extract_value_as_u64(input: &JsonValue) -> u64 {
     let note = &input["value"].as_fixed_point_u64(0).unwrap();
     note.clone()
 }
-use zcash_primitives::{consensus::BlockHeight, transaction::components::amount::DEFAULT_FEE};
+use zcash_primitives::transaction::components::amount::DEFAULT_FEE;
 #[test]
 fn note_selection_order() {
     //! In order to fund a transaction multiple notes may be selected and consumed.
