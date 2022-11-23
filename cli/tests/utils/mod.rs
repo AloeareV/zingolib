@@ -1,7 +1,5 @@
-use std::time::Duration;
+use std::{thread::sleep, time::Duration};
 
-use json::JsonValue;
-use tokio::time::sleep;
 use zingo_cli::regtest::RegtestManager;
 use zingolib::lightclient::LightClient;
 
@@ -14,28 +12,36 @@ async fn get_synced_wallet_height(client: &LightClient) -> u32 {
         .unwrap()
 }
 
-fn poll_server_height(manager: &RegtestManager) -> JsonValue {
-    let temp_tips = manager.get_chain_tip().unwrap().stdout;
+fn get_zcashd_highest_chaintip(manager: &RegtestManager) -> u64 {
+    let temp_tips = manager.get_chain_tips().unwrap().stdout;
     let tips = json::parse(&String::from_utf8_lossy(&temp_tips)).unwrap();
-    dbg!(tips[0]["height"].clone())
+    dbg!(tips[0]["height"].clone().as_fixed_point_u64(0).unwrap())
 }
 // This function _DOES NOT SYNC THE CLIENT/WALLET_.
-pub async fn increase_server_height(manager: &RegtestManager, n: u32) {
-    let start_height = poll_server_height(&manager).as_fixed_point_u64(2).unwrap();
-    let target = start_height + n as u64;
+// In fact it doesn't sync the lightwalletd to zcashd!
+pub async fn increase_blockchain_height_by_n(
+    manager: &RegtestManager,
+    client: &LightClient,
+    n: u32,
+) {
+    let start_height = get_zcashd_highest_chaintip(&manager) as u32;
+    let target = start_height + n;
     manager
         .generate_n_blocks(n)
         .expect("Called for side effect, failed!");
     let mut count = 0;
-    while poll_server_height(&manager).as_fixed_point_u64(2).unwrap() < target {
-        sleep(Duration::from_millis(50)).await;
+    while client.get_latest_block_height().await < target {
+        std::thread::sleep(Duration::from_millis(50));
         count = dbg!(count + 1);
     }
 }
+#[test]
+fn verify_synchronous_flow_on_increase_server_height_by_n() {}
 // This function increases the chain height reliably (with polling) but
 // it _also_ ensures that the client state is synced.
 // Unsynced clients are very interesting to us.  See increate_server_height
 // to reliably increase the server without syncing the client
+// and without syncing the lightwalletd to the blockchain!
 pub async fn increase_height_and_sync_client(
     manager: &RegtestManager,
     client: &LightClient,
@@ -47,7 +53,7 @@ pub async fn increase_height_and_sync_client(
         .generate_n_blocks(n)
         .expect("Called for side effect, failed!");
     while check_wallet_chainheight_value(&client, target).await {
-        sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50));
     }
 }
 async fn check_wallet_chainheight_value(client: &LightClient, target: u32) -> bool {

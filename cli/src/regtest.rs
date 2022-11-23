@@ -138,7 +138,7 @@ impl RegtestManager {
             .args(["generate".to_string(), num_blocks.to_string()])
             .output()
     }
-    pub fn get_chain_tip(&self) -> Result<std::process::Output, std::io::Error> {
+    pub fn get_chain_tips(&self) -> Result<std::process::Output, std::io::Error> {
         self.get_cli_handle()
             .arg("getchaintips".to_string())
             .output()
