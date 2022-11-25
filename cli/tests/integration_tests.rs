@@ -23,6 +23,25 @@ fn zcashd_sapling_commitment_tree() {
 }
 
 #[test]
+fn duplicate_out_of_sync_client_causes_double_spend() {
+    let (regtest_manager, child_process_handler, mut client_builder) =
+        saplingcoinbasebacked_spendcapable();
+    let client_sending = client_builder.new_sameseed_client(0, false);
+    let client_receiving = client_builder.new_plantedseed_client(TEST_SEED.to_string(), 0, false);
+    Runtime::new().unwrap().block_on(async {
+        utils::increase_height_and_sync_client(&regtest_manager, &client_receiving, 100).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &client_sending, 0).await;
+        let ua = client_receiving.do_new_address("o").await.unwrap()[0].to_string();
+        client_sending
+            .do_send(vec![(&ua, 10_000, Some("Interrupting sync!!".to_string()))])
+            .await
+            .unwrap();
+        utils::increase_height_and_sync_client(&regtest_manager, &client_receiving, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &client_sending, 0).await;
+    });
+    drop(child_process_handler);
+}
+#[test]
 fn verify_old_wallet_uses_server_height_in_send() {
     let (regtest_manager, child_process_handler, mut client_builder) =
         saplingcoinbasebacked_spendcapable();
@@ -40,7 +59,6 @@ fn verify_old_wallet_uses_server_height_in_send() {
         // Verify that wallet is still back at 6.
         assert_eq!(client_wallet_height, 6);
 
-        // Interrupt generating send
         client_sending
             .do_send(vec![(&ua, 10_000, Some("Interrupting sync!!".to_string()))])
             .await
