@@ -704,6 +704,7 @@ impl LightClient {
                                 "note_recipient"       => hex::encode(&orch_note_metadata.note.recipient().to_raw_address_bytes()),
                                 "note_rho"             => hex::encode(&orch_note_metadata.note.rho().to_bytes()),
                                 "note_rseed"           => hex::encode(orch_note_metadata.note.rseed().as_bytes()),
+                                "note_cmx"             => hex::encode(&orchard::note::ExtractedNoteCommitment::from(orch_note_metadata.note.commitment()).to_bytes()),
                                 "merkle_tree_position" => witness.position(),
                                 "merkle_tree_path"     => witness.path().unwrap().auth_path
                                     .iter()
