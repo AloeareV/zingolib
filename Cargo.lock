@@ -3911,7 +3911,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zingo-memo-utils"
+name = "zingo-memo"
 version = "0.1.0"
 dependencies = [
  "zcash_address",
@@ -4005,7 +4005,7 @@ dependencies = [
  "zcash_note_encryption",
  "zcash_primitives",
  "zcash_proofs",
- "zingo-memo-utils",
+ "zingo-memo",
  "zingoconfig 0.1.0",
 ]
 
