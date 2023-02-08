@@ -35,20 +35,23 @@ use zingoconfig::ZingoConfig;
 use super::syncdata::BlazeSyncData;
 
 pub struct TrialDecryptions {
-    usc: Arc<RwLock<UnifiedSpendCapability>>,
+    sapling_ivk: SaplingIvk,
+    orchard_ivk: OrchardIvk,
     transaction_metadata_set: Arc<RwLock<TransactionMetadataSet>>,
     config: Arc<ZingoConfig>,
 }
 
 impl TrialDecryptions {
     pub fn new(
+        sapling_ivk: SaplingIvk,
+        orchard_ivk: OrchardIvk,
         config: Arc<ZingoConfig>,
-        usc: Arc<RwLock<UnifiedSpendCapability>>,
         transaction_metadata_set: Arc<RwLock<TransactionMetadataSet>>,
     ) -> Self {
         Self {
+            sapling_ivk,
+            orchard_ivk,
             config,
-            usc,
             transaction_metadata_set,
         }
     }
@@ -75,7 +78,6 @@ impl TrialDecryptions {
         // Create a new channel where we'll receive the blocks
         let (transmitter, mut receiver) = unbounded_channel::<CompactBlock>();
 
-        let usc = self.usc.clone();
         let transaction_metadata_set = self.transaction_metadata_set.clone();
 
         let config = self.config.clone();
@@ -83,18 +85,12 @@ impl TrialDecryptions {
             let mut workers = FuturesUnordered::new();
             let mut cbs = vec![];
 
-            let sapling_ivk = SaplingIvk::from(&*usc.read().await);
-            let orchard_ivk = orchard::keys::IncomingViewingKey::from(&*usc.read().await);
-
             while let Some(cb) = receiver.recv().await {
                 cbs.push(cb);
 
                 if cbs.len() >= 125 {
                     // We seem to have enough to delegate to a new thread.
                     // Why 1000?
-                    let usc = usc.clone();
-                    let sapling_ivk = sapling_ivk.clone();
-                    let orchard_ivk = orchard_ivk.clone();
                     let transaction_metadata_set = transaction_metadata_set.clone();
                     let bsync_data = bsync_data.clone();
                     let detected_transaction_id_sender = detected_transaction_id_sender.clone();
@@ -103,10 +99,9 @@ impl TrialDecryptions {
                     workers.push(tokio::spawn(Self::trial_decrypt_batch(
                         config,
                         cbs.split_off(0), // This allocates all received cbs to the spawn.
-                        usc,
                         bsync_data,
-                        sapling_ivk,
-                        orchard_ivk,
+                        self.sapling_ivk.clone(),
+                        self.orchard_ivk.clone(),
                         transaction_metadata_set,
                         transaction_size_filter,
                         detected_transaction_id_sender,
@@ -118,10 +113,9 @@ impl TrialDecryptions {
             workers.push(tokio::spawn(Self::trial_decrypt_batch(
                 config,
                 cbs,
-                usc,
                 bsync_data,
-                sapling_ivk,
-                orchard_ivk,
+                self.sapling_ivk.clone(),
+                self.orchard_ivk.clone(),
                 transaction_metadata_set,
                 transaction_size_filter,
                 detected_transaction_id_sender,
@@ -144,7 +138,6 @@ impl TrialDecryptions {
     async fn trial_decrypt_batch(
         config: Arc<ZingoConfig>,
         compact_blocks: Vec<CompactBlock>,
-        usc: Arc<RwLock<UnifiedSpendCapability>>,
         bsync_data: Arc<RwLock<BlazeSyncData>>,
         sapling_ivk: SaplingIvk,
         orchard_ivk: OrchardIvk,
@@ -186,7 +179,6 @@ impl TrialDecryptions {
                     sapling_ivk.clone(),
                     height,
                     &config,
-                    &usc,
                     &bsync_data,
                     &transaction_metadata_set,
                     &detected_transaction_id_sender,
@@ -201,7 +193,6 @@ impl TrialDecryptions {
                     orchard_ivk.clone(),
                     height,
                     &config,
-                    &usc,
                     &bsync_data,
                     &transaction_metadata_set,
                     &detected_transaction_id_sender,
@@ -250,7 +241,6 @@ impl TrialDecryptions {
         ivk: D::IncomingViewingKey,
         height: BlockHeight,
         config: &zingoconfig::ZingoConfig,
-        usc: &Arc<RwLock<UnifiedSpendCapability>>,
         bsync_data: &Arc<RwLock<BlazeSyncData>>,
         transaction_metadata_set: &Arc<RwLock<TransactionMetadataSet>>,
         detected_transaction_id_sender: &UnboundedSender<(
@@ -276,7 +266,6 @@ impl TrialDecryptions {
             if let (i, Some(((note, to), _ivk_num))) = maybe_decrypted_output {
                 *transaction_metadata = true; // i.e. we got metadata
 
-                let usc = usc.clone();
                 let bsync_data = bsync_data.clone();
                 let transaction_metadata_set = transaction_metadata_set.clone();
                 let detected_transaction_id_sender = detected_transaction_id_sender.clone();
@@ -285,9 +274,6 @@ impl TrialDecryptions {
                 let config = config.clone();
 
                 workers.push(tokio::spawn(async move {
-                    let usc = usc.read().await;
-                    let fvk = D::usc_to_fvk(&*usc);
-
                     // We don't have fvk import, all our keys are spending
                     let have_spending_key = true;
                     let uri = bsync_data.read().await.uri().clone();
@@ -307,11 +293,6 @@ impl TrialDecryptions {
                         .await?;
 
                     let transaction_id = TransactionMetadata::new_txid(&compact_transaction.hash);
-                    let nullifier = D::WalletNote::get_nullifier_from_note_fvk_and_witness_position(
-                        &note,
-                        &fvk,
-                        witness.position() as u64,
-                    );
 
                     transaction_metadata_set.write().await.add_new_note::<D>(
                         transaction_id.clone(),
@@ -320,7 +301,6 @@ impl TrialDecryptions {
                         timestamp,
                         note,
                         to,
-                        &fvk,
                         have_spending_key,
                         witness,
                     );
@@ -328,7 +308,7 @@ impl TrialDecryptions {
                     debug!("Trial decrypt Detected txid {}", &transaction_id);
 
                     detected_transaction_id_sender
-                        .send((transaction_id, nullifier.into(), height, Some((i) as u32)))
+                        .send((transaction_id, height, Some((i) as u32)))
                         .unwrap();
 
                     Ok::<_, String>(())
