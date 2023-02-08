@@ -914,6 +914,7 @@ impl LightWallet {
         transparent_only: bool,
         shield_transparent: bool,
         prefer_orchard_over_sapling: bool,
+        only_spendable_notes: bool,
     ) -> (
         Vec<SpendableOrchardNote>,
         Vec<SpendableSaplingNote>,
@@ -948,7 +949,10 @@ impl LightWallet {
         if prefer_orchard_over_sapling {
             let sapling_candidates = self
                 .get_all_domain_specific_notes::<SaplingDomain<zingoconfig::ChainType>>()
-                .await;
+                .await
+                .into_iter()
+                .filter(|x| !only_spendable_notes | x.spend_key().is_some())
+                .collect();
             (sapling_notes, sapling_value_selected) =
                 Self::add_notes_to_total::<SaplingDomain<zingoconfig::ChainType>>(
                     sapling_candidates,
@@ -963,7 +967,12 @@ impl LightWallet {
                 );
             }
         }
-        let orchard_candidates = self.get_all_domain_specific_notes::<OrchardDomain>().await;
+        let orchard_candidates = self
+            .get_all_domain_specific_notes::<OrchardDomain>()
+            .await
+            .into_iter()
+            .filter(|x| !only_spendable_notes | x.spend_key().is_some())
+            .collect();
         let (orchard_notes, orchard_value_selected) = Self::add_notes_to_total::<OrchardDomain>(
             orchard_candidates,
             (target_amount - total_transparent_value - sapling_value_selected).unwrap(),
@@ -1035,7 +1044,7 @@ impl LightWallet {
                         transaction_id,
                         note,
                         self.transaction_context.config.reorg_buffer_offset as usize,
-                        &Some(extsk),
+                        Some(&extsk),
                     )
                 }
             })
@@ -1188,6 +1197,7 @@ impl LightWallet {
                 transparent_only,
                 true,
                 migrate_sapling_to_orchard,
+                true,
             )
             .await;
         if selected_value < target_amount {
@@ -1247,7 +1257,10 @@ impl LightWallet {
         for selected in sapling_notes.iter() {
             println!("Adding sapling spend");
             if let Err(e) = builder.add_sapling_spend(
-                selected.extsk.clone(),
+                selected
+                    .extsk
+                    .clone()
+                    .ok_or("Spending key for a Sapling note is missing.".to_string())?,
                 selected.diversifier,
                 selected.note.clone(),
                 selected.witness.path().unwrap(),
@@ -1262,7 +1275,10 @@ impl LightWallet {
             println!("Adding orchard spend");
             let path = selected.witness.path().unwrap();
             if let Err(e) = builder.add_orchard_spend(
-                selected.spend_key.clone(),
+                selected
+                    .spend_key
+                    .clone()
+                    .ok_or("Spending key for an Orchard note is missing.".to_string())?,
                 selected.note.clone(),
                 orchard::tree::MerklePath::from((
                     incrementalmerkletree::Position::from(path.position as usize),
