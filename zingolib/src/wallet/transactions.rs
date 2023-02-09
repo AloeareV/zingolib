@@ -781,7 +781,6 @@ impl TransactionMetadataSet {
             timestamp,
             note,
             to,
-            extfvk,
             have_spending_key,
             witness,
         )
@@ -794,7 +793,6 @@ impl TransactionMetadataSet {
         timestamp: u64,
         note: OrchardNote,
         to: orchard::Address,
-        fvk: &OrchardFullViewingKey,
         have_spending_key: bool,
         witness: IncrementalWitness<MerkleHashOrchard>,
     ) {
@@ -805,7 +803,6 @@ impl TransactionMetadataSet {
             timestamp,
             note,
             to,
-            fvk,
             have_spending_key,
             witness,
         )
@@ -819,7 +816,6 @@ impl TransactionMetadataSet {
         timestamp: u64,
         note: <D::WalletNote as ReceivedNoteAndMetadata>::Note,
         to: D::Recipient,
-        fvk: &<D::WalletNote as ReceivedNoteAndMetadata>::Fvk,
         have_spending_key: bool,
         witness: IncrementalWitness<<D::WalletNote as ReceivedNoteAndMetadata>::Node>,
     ) where
@@ -838,11 +834,6 @@ impl TransactionMetadataSet {
         // Update the block height, in case this was a mempool or unconfirmed tx.
         transaction_metadata.block_height = height;
 
-        let nullifier = D::WalletNote::get_nullifier_from_note_fvk_and_witness_position(
-            &note,
-            &fvk,
-            witness.position() as u64,
-        );
         let witnesses = if have_spending_key {
             WitnessCache::new(vec![witness], u64::from(height))
         } else {
@@ -855,11 +846,9 @@ impl TransactionMetadataSet {
         {
             None => {
                 let nd = D::WalletNote::from_parts(
-                    fvk.clone(),
                     D::Recipient::diversifier(&to),
                     note,
                     witnesses,
-                    nullifier,
                     None,
                     None,
                     None,

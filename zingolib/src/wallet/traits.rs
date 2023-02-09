@@ -420,11 +420,9 @@ pub trait ReceivedNoteAndMetadata: Sized {
         WitnessCache<Self::Node>,
     );
     fn from_parts(
-        extfvk: Self::Fvk,
         diversifier: Self::Diversifier,
         note: Self::Note,
         witnesses: WitnessCache<Self::Node>,
-        nullifier: Self::Nullifier,
         spent: Option<(TxId, u32)>,
         unconfirmed_spent: Option<(TxId, u32)>,
         memo: Option<Memo>,
@@ -432,7 +430,6 @@ pub trait ReceivedNoteAndMetadata: Sized {
         have_spending_key: bool,
     ) -> Self;
     fn is_change(&self) -> bool;
-    fn fvk(&self) -> &Self::Fvk;
     fn diversifier(
         &self,
     ) -> &<<Self::Fvk as Diversifiable>::Note as ReceivedNoteAndMetadata>::Diversifier;
@@ -444,7 +441,6 @@ pub trait ReceivedNoteAndMetadata: Sized {
         fvk: &Self::Fvk,
         position: u64,
     ) -> Self::Nullifier;
-    fn nullifier(&self) -> Self::Nullifier;
     fn value_from_note(note: &Self::Note) -> u64;
     fn spent(&self) -> &Option<(TxId, u32)>;
     fn spent_mut(&mut self) -> &mut Option<(TxId, u32)>;
@@ -490,11 +486,9 @@ impl ReceivedNoteAndMetadata for ReceivedSaplingNoteAndMetadata {
     ) = TransactionMetadataSet::set_sapling_note_witnesses;
 
     fn from_parts(
-        extfvk: SaplingExtendedFullViewingKey,
         diversifier: SaplingDiversifier,
         note: SaplingNote,
         witnesses: WitnessCache<SaplingNode>,
-        nullifier: SaplingNullifier,
         spent: Option<(TxId, u32)>,
         unconfirmed_spent: Option<(TxId, u32)>,
         memo: Option<Memo>,
@@ -502,11 +496,9 @@ impl ReceivedNoteAndMetadata for ReceivedSaplingNoteAndMetadata {
         have_spending_key: bool,
     ) -> Self {
         Self {
-            extfvk,
             diversifier,
             note,
             witnesses,
-            nullifier,
             spent,
             unconfirmed_spent,
             memo,
@@ -517,10 +509,6 @@ impl ReceivedNoteAndMetadata for ReceivedSaplingNoteAndMetadata {
 
     fn is_change(&self) -> bool {
         self.is_change
-    }
-
-    fn fvk(&self) -> &Self::Fvk {
-        &self.extfvk
     }
 
     fn diversifier(&self) -> &Self::Diversifier {
@@ -545,10 +533,6 @@ impl ReceivedNoteAndMetadata for ReceivedSaplingNoteAndMetadata {
         position: u64,
     ) -> Self::Nullifier {
         note.nf(&extfvk.fvk.vk.nk, position)
-    }
-
-    fn nullifier(&self) -> Self::Nullifier {
-        self.nullifier
     }
 
     fn value_from_note(note: &Self::Note) -> u64 {
@@ -616,11 +600,9 @@ impl ReceivedNoteAndMetadata for ReceivedOrchardNoteAndMetadata {
     ) = TransactionMetadataSet::set_orchard_note_witnesses;
 
     fn from_parts(
-        fvk: Self::Fvk,
         diversifier: Self::Diversifier,
         note: Self::Note,
         witnesses: WitnessCache<Self::Node>,
-        nullifier: Self::Nullifier,
         spent: Option<(TxId, u32)>,
         unconfirmed_spent: Option<(TxId, u32)>,
         memo: Option<Memo>,
@@ -628,11 +610,9 @@ impl ReceivedNoteAndMetadata for ReceivedOrchardNoteAndMetadata {
         have_spending_key: bool,
     ) -> Self {
         Self {
-            fvk,
             diversifier,
             note,
             witnesses,
-            nullifier,
             spent,
             unconfirmed_spent,
             memo,
@@ -643,9 +623,6 @@ impl ReceivedNoteAndMetadata for ReceivedOrchardNoteAndMetadata {
 
     fn is_change(&self) -> bool {
         self.is_change
-    }
-    fn fvk(&self) -> &Self::Fvk {
-        &self.fvk
     }
     fn diversifier(&self) -> &Self::Diversifier {
         &self.diversifier
@@ -667,10 +644,6 @@ impl ReceivedNoteAndMetadata for ReceivedOrchardNoteAndMetadata {
         _position: u64,
     ) -> Self::Nullifier {
         note.nullifier(fvk)
-    }
-
-    fn nullifier(&self) -> Self::Nullifier {
-        self.nullifier
     }
 
     fn value_from_note(note: &Self::Note) -> u64 {
@@ -905,7 +878,6 @@ where
             witness.map(|w| {
                 Self::from_parts_unchecked(
                     transaction_id,
-                    note_and_metadata.nullifier(),
                     *note_and_metadata.diversifier(),
                     note_and_metadata.note().clone(),
                     w.clone(),
@@ -920,14 +892,12 @@ where
     /// default impl of `from`. This function's only caller should be `Self::from`
     fn from_parts_unchecked(
         transaction_id: TxId,
-        nullifier: <D::WalletNote as ReceivedNoteAndMetadata>::Nullifier,
         diversifier: <D::WalletNote as ReceivedNoteAndMetadata>::Diversifier,
         note: D::Note,
         witness: IncrementalWitness<<D::WalletNote as ReceivedNoteAndMetadata>::Node>,
         sk: Option<&D::SpendingKey>,
     ) -> Self;
     fn transaction_id(&self) -> TxId;
-    fn nullifier(&self) -> <D::WalletNote as ReceivedNoteAndMetadata>::Nullifier;
     fn diversifier(&self) -> <D::WalletNote as ReceivedNoteAndMetadata>::Diversifier;
     fn note(&self) -> &D::Note;
     fn witness(&self) -> &IncrementalWitness<<D::WalletNote as ReceivedNoteAndMetadata>::Node>;
@@ -937,7 +907,6 @@ where
 impl SpendableNote<SaplingDomain<ChainType>> for SpendableSaplingNote {
     fn from_parts_unchecked(
         transaction_id: TxId,
-        nullifier: SaplingNullifier,
         diversifier: SaplingDiversifier,
         note: SaplingNote,
         witness: IncrementalWitness<SaplingNode>,
@@ -955,10 +924,6 @@ impl SpendableNote<SaplingDomain<ChainType>> for SpendableSaplingNote {
 
     fn transaction_id(&self) -> TxId {
         self.transaction_id
-    }
-
-    fn nullifier(&self) -> SaplingNullifier {
-        self.nullifier
     }
 
     fn diversifier(&self) -> SaplingDiversifier {
@@ -981,7 +946,6 @@ impl SpendableNote<SaplingDomain<ChainType>> for SpendableSaplingNote {
 impl SpendableNote<OrchardDomain> for SpendableOrchardNote {
     fn from_parts_unchecked(
         transaction_id: TxId,
-        nullifier: OrchardNullifier,
         diversifier: OrchardDiversifier,
         note: OrchardNote,
         witness: IncrementalWitness<MerkleHashOrchard>,
@@ -989,7 +953,6 @@ impl SpendableNote<OrchardDomain> for SpendableOrchardNote {
     ) -> Self {
         SpendableOrchardNote {
             transaction_id,
-            nullifier,
             diversifier,
             note,
             witness,
@@ -998,10 +961,6 @@ impl SpendableNote<OrchardDomain> for SpendableOrchardNote {
     }
     fn transaction_id(&self) -> TxId {
         self.transaction_id
-    }
-
-    fn nullifier(&self) -> OrchardNullifier {
-        self.nullifier
     }
 
     fn diversifier(&self) -> OrchardDiversifier {
@@ -1148,12 +1107,14 @@ impl<T> ReadableWriteable<()> for T
 where
     T: ReceivedNoteAndMetadata,
 {
-    const VERSION: u8 = 1;
+    const VERSION: u8 = 2;
 
     fn read<R: Read>(mut reader: R, _: ()) -> io::Result<Self> {
-        let _version = Self::get_version(&mut reader)?;
+        let version = Self::get_version(&mut reader)?;
 
-        let fvk = <T::Fvk as ReadableWriteable<()>>::read(&mut reader, ())?;
+        if version <= 1 {
+            let _fvk = <T::Fvk as ReadableWriteable<()>>::read(&mut reader, ())?;
+        }
 
         let mut diversifier_bytes = [0u8; 11];
         reader.read_exact(&mut diversifier_bytes)?;
@@ -1166,9 +1127,11 @@ where
         let top_height = reader.read_u64::<LittleEndian>()?;
         let witnesses = WitnessCache::new(witnesses_vec, top_height);
 
-        let mut nullifier = [0u8; 32];
-        reader.read_exact(&mut nullifier)?;
-        let nullifier = T::Nullifier::from_bytes(nullifier);
+        if version < 1 {
+            let mut nullifier = [0u8; 32];
+            reader.read_exact(&mut nullifier)?;
+            let _nullifier = T::Nullifier::from_bytes(nullifier);
+        }
 
         // Note that this is only the spent field, we ignore the unconfirmed_spent field.
         // The reason is that unconfirmed spents are only in memory, and we need to get the actual value of spent
@@ -1212,11 +1175,9 @@ where
         let have_spending_key = reader.read_u8()? > 0;
 
         Ok(T::from_parts(
-            fvk,
             diversifier,
             note,
             witnesses,
-            nullifier,
             spent,
             unconfirmed_spent,
             memo,
@@ -1229,8 +1190,6 @@ where
         // Write a version number first, so we can later upgrade this if needed.
         writer.write_u8(Self::VERSION)?;
 
-        self.fvk().write(&mut writer)?;
-
         writer.write_all(&self.diversifier().to_bytes())?;
 
         self.note().write(&mut writer)?;
@@ -1238,8 +1197,6 @@ where
             wi.write(wr)
         })?;
         writer.write_u64::<LittleEndian>(self.witnesses().top_height)?;
-
-        writer.write_all(&self.nullifier().to_bytes())?;
 
         Optional::write(
             &mut writer,

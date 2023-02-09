@@ -79,6 +79,8 @@ impl TrialDecryptions {
         let (transmitter, mut receiver) = unbounded_channel::<CompactBlock>();
 
         let transaction_metadata_set = self.transaction_metadata_set.clone();
+        let sapling_ivk = self.sapling_ivk.clone();
+        let orchard_ivk = self.orchard_ivk.clone();
 
         let config = self.config.clone();
         let management_thread_handle = tokio::spawn(async move {
@@ -100,8 +102,8 @@ impl TrialDecryptions {
                         config,
                         cbs.split_off(0), // This allocates all received cbs to the spawn.
                         bsync_data,
-                        self.sapling_ivk.clone(),
-                        self.orchard_ivk.clone(),
+                        sapling_ivk.clone(),
+                        orchard_ivk.clone(),
                         transaction_metadata_set,
                         transaction_size_filter,
                         detected_transaction_id_sender,
@@ -114,8 +116,8 @@ impl TrialDecryptions {
                 config,
                 cbs,
                 bsync_data,
-                self.sapling_ivk.clone(),
-                self.orchard_ivk.clone(),
+                sapling_ivk.clone(),
+                orchard_ivk.clone(),
                 transaction_metadata_set,
                 transaction_size_filter,
                 detected_transaction_id_sender,
@@ -243,12 +245,7 @@ impl TrialDecryptions {
         config: &zingoconfig::ZingoConfig,
         bsync_data: &Arc<RwLock<BlazeSyncData>>,
         transaction_metadata_set: &Arc<RwLock<TransactionMetadataSet>>,
-        detected_transaction_id_sender: &UnboundedSender<(
-            TxId,
-            PoolNullifier,
-            BlockHeight,
-            Option<u32>,
-        )>,
+        detected_transaction_id_sender: &UnboundedSender<(TxId, BlockHeight, Option<u32>)>,
         workers: &FuturesUnordered<JoinHandle<Result<(), String>>>,
     ) where
         D: DomainWalletExt,

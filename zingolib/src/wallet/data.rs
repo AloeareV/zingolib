@@ -218,16 +218,11 @@ impl<Node: Hashable> WitnessCache<Node> {
     // }
 }
 pub struct ReceivedSaplingNoteAndMetadata {
-    // Technically, this should be recoverable from the account number,
-    // but we're going to refactor this in the future, so I'll write it again here.
-    pub(super) extfvk: ExtendedFullViewingKey,
-
     pub diversifier: SaplingDiversifier,
     pub note: SaplingNote,
 
     // Witnesses for the last 100 blocks. witnesses.last() is the latest witness
     pub(crate) witnesses: WitnessCache<SaplingNode>,
-    pub(super) nullifier: SaplingNullifier,
     pub spent: Option<(TxId, u32)>, // If this note was confirmed spent
 
     // If this note was spent in a send, but has not yet been confirmed.
@@ -241,14 +236,11 @@ pub struct ReceivedSaplingNoteAndMetadata {
 }
 
 pub struct ReceivedOrchardNoteAndMetadata {
-    pub(super) fvk: orchard::keys::FullViewingKey,
-
     pub diversifier: OrchardDiversifier,
     pub note: OrchardNote,
 
     // Witnesses for the last 100 blocks. witnesses.last() is the latest witness
     pub(crate) witnesses: WitnessCache<MerkleHashOrchard>,
-    pub(super) nullifier: OrchardNullifier,
     pub spent: Option<(TxId, u32)>, // If this note was confirmed spent
 
     // If this note was spent in a send, but has not yet been confirmed.
@@ -264,10 +256,8 @@ pub struct ReceivedOrchardNoteAndMetadata {
 impl std::fmt::Debug for ReceivedSaplingNoteAndMetadata {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SaplingNoteData")
-            .field("extfvk", &self.extfvk)
             .field("diversifier", &self.diversifier)
             .field("note", &self.note)
-            .field("nullifier", &self.nullifier)
             .field("spent", &self.spent)
             .field("unconfirmed_spent", &self.unconfirmed_spent)
             .field("memo", &self.memo)
@@ -748,7 +738,6 @@ impl TransactionMetadata {
 
 pub struct SpendableSaplingNote {
     pub transaction_id: TxId,
-    pub nullifier: SaplingNullifier,
     pub diversifier: SaplingDiversifier,
     pub note: SaplingNote,
     pub witness: IncrementalWitness<SaplingNode>,
@@ -757,7 +746,6 @@ pub struct SpendableSaplingNote {
 
 pub struct SpendableOrchardNote {
     pub transaction_id: TxId,
-    pub nullifier: OrchardNullifier,
     pub diversifier: OrchardDiversifier,
     pub note: OrchardNote,
     pub witness: IncrementalWitness<MerkleHashOrchard>,
