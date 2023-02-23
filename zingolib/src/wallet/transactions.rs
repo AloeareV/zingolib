@@ -674,6 +674,16 @@ impl TransactionMetadataSet {
         value
     }
 
+    pub fn add_note(
+        &mut self,
+        txid: TxId,
+        height: u32,
+        unconfirmed: bool,
+        timestamp: u64,
+        add_note: dyn Fn() -> (),
+    ) {
+        let wallet_transaction = self.get_wallet_transaction(txid, height, unconfirmed, timestamp);
+    }
     pub fn add_new_taddr_output(
         &mut self,
         txid: TxId,
