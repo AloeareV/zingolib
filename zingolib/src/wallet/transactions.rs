@@ -510,29 +510,32 @@ impl TransactionMetadataSet {
         }
     }
 
-    fn get_or_create_transaction_metadata(
+    /// Always called internally during addition of a transaction to the WalletTransactions
+    fn get_wallet_transaction(
         &mut self,
         txid: &TxId,
         height: BlockHeight,
         unconfirmed: bool,
         datetime: u64,
     ) -> &'_ mut TransactionMetadata {
-        if !self.current.contains_key(&txid) {
+        let transaction_metadata: &'_ mut TransactionMetadata;
+        if self.current.contains_key(&txid) {
+            transaction_metadata = self.current.get_mut(&txid).expect("Txid should be present");
+
+            // If the unconfirmed status has changed, update it, block_height, and datetime
+            if transaction_metadata.unconfirmed != unconfirmed {
+                transaction_metadata.unconfirmed = unconfirmed;
+                transaction_metadata.block_height = height;
+                transaction_metadata.datetime = datetime;
+            }
+        } else {
             self.current.insert(
                 txid.clone(),
                 TransactionMetadata::new(BlockHeight::from(height), datetime, &txid, unconfirmed),
             );
+            transaction_metadata = self.current.get_mut(&txid).expect("Txid should be present");
             self.some_txid_from_highest_wallet_block = Some(txid.clone());
         }
-        let transaction_metadata = self.current.get_mut(&txid).expect("Txid should be present");
-
-        // Make sure the unconfirmed status matches
-        if transaction_metadata.unconfirmed != unconfirmed {
-            transaction_metadata.unconfirmed = unconfirmed;
-            transaction_metadata.block_height = height;
-            transaction_metadata.datetime = datetime;
-        }
-
         transaction_metadata
     }
 
@@ -586,7 +589,7 @@ impl TransactionMetadataSet {
         source_txid: TxId,
     ) {
         // Record this Tx as having spent some funds
-        let transaction_metadata = self.get_or_create_transaction_metadata(
+        let transaction_metadata = self.get_wallet_transaction(
             &txid,
             BlockHeight::from(height),
             unconfirmed,
@@ -631,12 +634,8 @@ impl TransactionMetadataSet {
         timestamp: u64,
         total_transparent_value_spent: u64,
     ) {
-        let transaction_metadata = self.get_or_create_transaction_metadata(
-            &txid,
-            BlockHeight::from(height),
-            unconfirmed,
-            timestamp,
-        );
+        let transaction_metadata =
+            self.get_wallet_transaction(&txid, BlockHeight::from(height), unconfirmed, timestamp);
         transaction_metadata.total_transparent_value_spent = total_transparent_value_spent;
 
         self.check_notes_mark_change(&txid);
@@ -686,12 +685,8 @@ impl TransactionMetadataSet {
         output_num: u32,
     ) {
         // Read or create the current TxId
-        let transaction_metadata = self.get_or_create_transaction_metadata(
-            &txid,
-            BlockHeight::from(height),
-            unconfirmed,
-            timestamp,
-        );
+        let transaction_metadata =
+            self.get_wallet_transaction(&txid, BlockHeight::from(height), unconfirmed, timestamp);
 
         // Add this UTXO if it doesn't already exist
         if let Some(utxo) = transaction_metadata
@@ -732,12 +727,8 @@ impl TransactionMetadataSet {
         // Check if this is a change note
         let is_change = self.total_funds_spent_in(&txid) > 0;
 
-        let transaction_metadata = self.get_or_create_transaction_metadata(
-            &txid,
-            BlockHeight::from(height),
-            true,
-            timestamp,
-        );
+        let transaction_metadata =
+            self.get_wallet_transaction(&txid, BlockHeight::from(height), true, timestamp);
         // Update the block height, in case this was a mempool or unconfirmed tx.
         transaction_metadata.block_height = height;
 
@@ -832,12 +823,8 @@ impl TransactionMetadataSet {
         // Check if this is a change note
         let is_change = self.total_funds_spent_in(&txid) > 0;
 
-        let transaction_metadata = self.get_or_create_transaction_metadata(
-            &txid,
-            BlockHeight::from(height),
-            unconfirmed,
-            timestamp,
-        );
+        let transaction_metadata =
+            self.get_wallet_transaction(&txid, BlockHeight::from(height), unconfirmed, timestamp);
         // Update the block height, in case this was a mempool or unconfirmed tx.
         transaction_metadata.block_height = height;
 
