@@ -1587,6 +1587,78 @@ async fn read_write_block_data(scenario: NBlockFCBLScenario) {
     }
 }
 
+#[tokio::test]
+async fn test_orchard_rescan() {
+    // wait for test server to start
+    let (data, config, ready_receiver, _stop_transmitter, _test_server_handle) =
+        create_test_server().await;
+    ready_receiver.await.unwrap();
+
+    let lightclient = LightClient::test_new(&config, Some(TEST_SEED.to_string()), 0)
+        .await
+        .unwrap();
+
+    let mut fake_compactblock_list = FakeCompactBlockList::new(0);
+    let usc = lightclient
+        .wallet
+        .unified_spend_capability()
+        .read()
+        .await
+        .clone();
+
+    // create transaction funding
+    let extfvk: ExtendedFullViewingKey = (&usc).try_into().unwrap();
+    let value = 1_000_000 + 1_000;
+    let (transaction, _height, _note) =
+        fake_compactblock_list.create_sapling_coinbase_transaction(&extfvk, value);
+    let txid = transaction.txid();
+
+    // make funding transaction spendable
+    mine_pending_blocks(&mut fake_compactblock_list, &data, &lightclient).await;
+    mine_numblocks_each_with_two_sap_txs(&mut fake_compactblock_list, &data, &lightclient, 5).await;
+
+    // test that we have the transaction
+    let list = lightclient.do_list_transactions(false).await;
+    assert_eq!(list[0]["txid"], txid.to_string());
+    assert_eq!(list[0]["amount"].as_u64().unwrap(), value);
+    let addr_0 = usc.addresses()[0].clone().encode(&config.chain);
+    assert_eq!(list[0]["address"], addr_0);
+
+    // check the balance
+    {
+        let balance = lightclient.do_balance().await;
+        assert_eq!(balance["sapling_balance"].as_u64().unwrap(), value);
+        assert_eq!(balance["orchard_balance"], 0);
+    }
+
+    // send funds to orchard addresss
+    let send_o_value = 1_000_000;
+    let tos = vec![(&addr_0[..], send_o_value, None)];
+    lightclient.test_do_send(tos).await.unwrap();
+
+    // mine the transaction
+    fake_compactblock_list.add_pending_sends(&data).await;
+    mine_pending_blocks(&mut fake_compactblock_list, &data, &lightclient).await;
+    mine_numblocks_each_with_two_sap_txs(&mut fake_compactblock_list, &data, &lightclient, 5).await;
+
+    // check the orchard balance
+    // this passes
+    {
+        let balance = lightclient.do_balance().await;
+        assert_eq!(balance["orchard_balance"], send_o_value);
+        assert_eq!(balance["verified_orchard_balance"], send_o_value);
+    }
+
+    // now rescan and check the orchard balance again
+    // this fails :/
+    lightclient.do_rescan().await.unwrap();
+    {
+        let balance = lightclient.do_balance().await;
+        assert_eq!(balance["orchard_balance"], send_o_value);
+        assert_eq!(balance["verified_orchard_balance"], send_o_value);
+    }
+}
+
 pub const EXT_TADDR: &str = "t1NoS6ZgaUTpmjkge2cVpXGcySasdYDrXqh";
 pub const EXT_ZADDR: &str =
     "zs1va5902apnzlhdu0pw9r9q7ca8s4vnsrp2alr6xndt69jnepn2v2qrj9vg3wfcnjyks5pg65g9dc";
