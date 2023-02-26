@@ -196,6 +196,8 @@ fn unspent_notes_are_not_saved() {
 
 #[test]
 fn check_block_reward_is_expected_size_for_height() {
+    //!  This test shows a signicant problem with regtest mode...  functions of the
+    //!  block_height are receive unrealistic input (~=1).
     let (regtest_manager, child_process_handler, mut client_builder) =
         scenarios::sapling_funded_client();
     let faucet = client_builder.build_new_faucet(0, false);
