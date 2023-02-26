@@ -210,6 +210,36 @@ fn check_block_reward_is_expected_size_for_height() {
 }
 
 #[test]
+fn send_to_legacy_addresses() {
+    let (regtest_manager, child_process_handler, mut client_builder) =
+        scenarios::sapling_funded_client();
+    let faucet = client_builder.build_new_faucet(0, false);
+    let client_receiving =
+        client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
+    Runtime::new().unwrap().block_on(async {
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
+
+        let balance = faucet.do_balance().await;
+        assert_eq!(balance["sapling_balance"], 3_750_000_000u64);
+        faucet
+            .do_send(vec![(
+                get_base_address!(client_receiving, "unified").as_str(),
+                5_000,
+                Some("this note never makes it to the wallet! or chain".to_string()),
+            )])
+            .await
+            .unwrap();
+
+        // The change from splitting one block reward into three pieces:
+        // * for client_receiving:   5000 ZAT
+        // * for miners/validators:  DEFAULT_FEE
+        // * for self:               BLOCK_REWARD - (DEFAULT_FEE + send)
+        //assert_eq!(faucet.do_balance().await["orchard_balance"],);
+    });
+    drop(child_process_handler);
+}
+
+#[test]
 fn send_mined_sapling_to_orchard() {
     //! This test shows the 5th confirmation changing the state of balance by
     //! debiting unverified_orchard_balance and crediting verified_orchard_balance.  The debit amount is
