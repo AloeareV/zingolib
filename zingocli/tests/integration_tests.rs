@@ -195,6 +195,19 @@ fn unspent_notes_are_not_saved() {
 }
 
 #[test]
+fn check_block_reward_is_expected_size_for_height() {
+    let (regtest_manager, child_process_handler, mut client_builder) =
+        scenarios::sapling_funded_client();
+    let faucet = client_builder.build_new_faucet(0, false);
+    Runtime::new().unwrap().block_on(async {
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 1).await;
+        let balance = faucet.do_balance().await;
+        assert_eq!(balance["sapling_balance"], 1_250_000_000u64);
+    });
+    drop(child_process_handler);
+}
+
+#[test]
 fn send_mined_sapling_to_orchard() {
     //! This test shows the 5th confirmation changing the state of balance by
     //! debiting unverified_orchard_balance and crediting verified_orchard_balance.  The debit amount is
