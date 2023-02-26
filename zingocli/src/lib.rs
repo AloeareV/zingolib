@@ -409,7 +409,7 @@ pub fn startup(
     // Print startup Messages
     info!(""); // Blank line
     info!("Starting Zingo-CLI");
-    info!("Light Client config {:?}", config);
+    info!("Light Client config: {:#?}", config);
 
     println!("Lightclient connecting to {}", config.get_server_uri());
 
