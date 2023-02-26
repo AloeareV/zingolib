@@ -9,6 +9,7 @@ use json::JsonValue;
 use tokio::runtime::Runtime;
 use utils::scenarios;
 
+pub const ARTIFICIAL_BLOCK_REWARD: u64 = 1_250_000_000;
 #[test]
 fn zcashd_sapling_commitment_tree() {
     //!  TODO:  Make this test assert something, what is this a test of?
@@ -204,7 +205,7 @@ fn check_block_reward_is_expected_size_for_height() {
     Runtime::new().unwrap().block_on(async {
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 1).await;
         let balance = faucet.do_balance().await;
-        assert_eq!(balance["sapling_balance"], 1_250_000_000u64);
+        assert_eq!(balance["sapling_balance"], ARTIFICIAL_BLOCK_REWARD);
     });
     drop(child_process_handler);
 }
@@ -217,10 +218,10 @@ fn send_to_legacy_addresses() {
     let client_receiving =
         client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
     Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 1).await;
 
         let balance = faucet.do_balance().await;
-        assert_eq!(balance["sapling_balance"], 3_750_000_000u64);
+        assert_eq!(balance["sapling_balance"], ARTIFICIAL_BLOCK_REWARD);
         faucet
             .do_send(vec![(
                 get_base_address!(client_receiving, "unified").as_str(),
