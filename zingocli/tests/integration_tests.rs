@@ -219,6 +219,7 @@ fn send_to_legacy_addresses() {
     let client_receiving =
         client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
     Runtime::new().unwrap().block_on(async {
+        let transfer_value_01 = ARTIFICIAL_BLOCK_REWARD - u64::from(DEFAULT_FEE);
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 1).await;
 
         let balance = faucet.do_balance().await;
@@ -226,11 +227,62 @@ fn send_to_legacy_addresses() {
         faucet
             .do_send(vec![(
                 get_base_address!(client_receiving, "unified").as_str(),
-                ARTIFICIAL_BLOCK_REWARD - u64::from(DEFAULT_FEE),
+                transfer_value_01,
                 Some("this note never makes it to the wallet! or chain".to_string()),
             )])
             .await
             .unwrap();
+        utils::increase_height_and_sync_client(&regtest_manager, &client_receiving, 1).await;
+        let cr_balance = client_receiving.do_balance().await;
+        assert_eq!(cr_balance["orchard_balance"], transfer_value_01);
+        let vob = cr_balance["verified_orchard_balance"].clone();
+        assert!(
+            transfer_value_01 == vob,
+            "transfer_value_01 = {}, vob = {}",
+            transfer_value_01,
+            vob
+        );
+
+        let transfer_value_02 = transfer_value_01 - u64::from(DEFAULT_FEE);
+        client_receiving
+            .do_send(vec![(
+                get_base_address!(client_receiving, "sapling").as_str(),
+                transfer_value_02,
+                Some("this note never makes it to the wallet! or chain".to_string()),
+            )])
+            .await
+            .unwrap();
+        utils::increase_height_and_sync_client(&regtest_manager, &client_receiving, 1).await;
+        let cr_balance = client_receiving.do_balance().await;
+        assert_eq!(cr_balance["orchard_balance"], 0);
+        let vsb = cr_balance["verified_sapling_balance"].clone();
+        assert!(
+            transfer_value_02 == vsb,
+            "transfer_value_02 = {}, vsb = {}",
+            transfer_value_02,
+            vsb
+        );
+
+        let transfer_value_03 = transfer_value_02 - u64::from(DEFAULT_FEE);
+        client_receiving
+            .do_send(vec![(
+                get_base_address!(client_receiving, "transparent").as_str(),
+                transfer_value_03,
+                Some("this note never makes it to the wallet! or chain".to_string()),
+            )])
+            .await
+            .unwrap();
+        utils::increase_height_and_sync_client(&regtest_manager, &client_receiving, 1).await;
+        let cr_balance = client_receiving.do_balance().await;
+        assert_eq!(cr_balance["orchard_balance"], 0);
+        assert_eq!(cr_balance["sapling_balance"], 0);
+        let tb = cr_balance["transparent_balance"].clone();
+        assert!(
+            transfer_value_03 == tb,
+            "transfer_value_03 = {}, vtb = {}",
+            transfer_value_03,
+            tb
+        );
 
         // The change from splitting one block reward into three pieces:
         // * for client_receiving:   5000 ZAT
