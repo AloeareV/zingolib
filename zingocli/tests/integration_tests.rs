@@ -64,6 +64,7 @@ fn verify_old_wallet_uses_server_height_in_send() {
     });
     drop(child_process_handler);
 }
+
 #[test]
 fn actual_empty_zcashd_sapling_commitment_tree() {
     // Expectations:
@@ -225,7 +226,7 @@ fn send_to_legacy_addresses() {
         faucet
             .do_send(vec![(
                 get_base_address!(client_receiving, "unified").as_str(),
-                5_000,
+                ARTIFICIAL_BLOCK_REWARD - u64::from(DEFAULT_FEE),
                 Some("this note never makes it to the wallet! or chain".to_string()),
             )])
             .await
