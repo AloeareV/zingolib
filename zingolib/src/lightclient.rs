@@ -11,12 +11,12 @@ use crate::{
         data::TransactionMetadata,
         keys::{
             address_from_pubkeyhash,
-            unified::{ReceiverSelection, UnifiedSpendCapability},
+            unified::{ReceiverSelection, WalletCapability},
         },
         message::Message,
         now,
         traits::{DomainWalletExt, ReceivedNoteAndMetadata, Recipient},
-        LightWallet,
+        LightWallet, WalletBase,
     },
 };
 use futures::future::join_all;
@@ -194,17 +194,10 @@ impl LightClient {
     /// Method to create a test-only version of the LightClient
     pub async fn test_new(
         config: &ZingoConfig,
-        seed_phrase: Option<String>,
+        wallet_base: WalletBase,
         height: u64,
     ) -> io::Result<Self> {
-        if seed_phrase.is_some() && config.wallet_exists() {
-            return Err(Error::new(
-                ErrorKind::AlreadyExists,
-                "Cannot create a new wallet from seed, because a wallet already exists",
-            ));
-        }
-
-        let l = LightClient::create_unconnected(config, seed_phrase, height)
+        let l = LightClient::create_unconnected(config, wallet_base, height)
             .expect("Unconnected client creation failed!");
         l.set_wallet_initial_state(height).await;
 
@@ -266,11 +259,11 @@ impl LightClient {
 impl LightClient {
     pub fn create_unconnected(
         config: &ZingoConfig,
-        seed_phrase: Option<String>,
+        wallet_base: WalletBase,
         height: u64,
     ) -> io::Result<Self> {
         Ok(LightClient {
-            wallet: LightWallet::new(config.clone(), seed_phrase, height)?,
+            wallet: LightWallet::new(config.clone(), wallet_base, height)?,
             config: config.clone(),
             mempool_monitor: std::sync::RwLock::new(None),
             bsync_data: Arc::new(RwLock::new(BlazeSyncData::new(&config))),
@@ -461,7 +454,7 @@ impl LightClient {
 
     fn new_wallet(config: &ZingoConfig, height: u64) -> io::Result<Self> {
         Runtime::new().unwrap().block_on(async move {
-            let l = LightClient::create_unconnected(&config, None, height)?;
+            let l = LightClient::create_unconnected(&config, WalletBase::FreshEntropy, height)?;
             l.set_wallet_initial_state(height).await;
 
             debug!("Created new wallet with a new seed!");
@@ -494,8 +487,8 @@ impl LightClient {
 
     /// The wallet this fn associates with the lightclient is specifically derived from
     /// a spend authority.
-    pub fn create_with_seedorkey_wallet(
-        key_or_seedphrase: String,
+    pub fn new_from_wallet_base(
+        wallet_base: WalletBase,
         config: &ZingoConfig,
         birthday: u64,
         overwrite: bool,
@@ -511,37 +504,26 @@ impl LightClient {
                 ));
             }
         }
+        Runtime::new().unwrap().block_on(async move {
+            let lightclient = LightClient {
+                wallet: LightWallet::new(config.clone(), wallet_base, birthday)?,
+                config: config.clone(),
+                mempool_monitor: std::sync::RwLock::new(None),
+                sync_lock: Mutex::new(()),
+                bsync_data: Arc::new(RwLock::new(BlazeSyncData::new(&config))),
+                interrupt_sync: Arc::new(RwLock::new(false)),
+            };
 
-        if key_or_seedphrase.starts_with(config.hrp_sapling_private_key())
-            || key_or_seedphrase.starts_with(config.hrp_sapling_viewing_key())
-            || key_or_seedphrase.starts_with(config.chain.hrp_orchard_spending_key())
-        {
-            Err(Error::new(
-                ErrorKind::InvalidInput,
-                "Key import not currently supported",
-            ))
-        } else {
-            Runtime::new().unwrap().block_on(async move {
-                let lightclient = LightClient {
-                    wallet: LightWallet::new(config.clone(), Some(key_or_seedphrase), birthday)?,
-                    config: config.clone(),
-                    mempool_monitor: std::sync::RwLock::new(None),
-                    sync_lock: Mutex::new(()),
-                    bsync_data: Arc::new(RwLock::new(BlazeSyncData::new(&config))),
-                    interrupt_sync: Arc::new(RwLock::new(false)),
-                };
+            lightclient.set_wallet_initial_state(birthday).await;
+            lightclient
+                .do_save()
+                .await
+                .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
 
-                lightclient.set_wallet_initial_state(birthday).await;
-                lightclient
-                    .do_save()
-                    .await
-                    .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+            debug!("Created new wallet!");
 
-                debug!("Created new wallet!");
-
-                Ok(lightclient)
-            })
-        }
+            Ok(lightclient)
+        })
     }
 
     pub fn read_wallet_from_disk(config: &ZingoConfig) -> io::Result<Self> {
@@ -596,13 +578,7 @@ impl LightClient {
 
     pub async fn do_addresses(&self) -> JsonValue {
         let mut objectified_addresses = Vec::new();
-        for address in self
-            .wallet
-            .unified_spend_capability()
-            .read()
-            .await
-            .addresses()
-        {
+        for address in self.wallet.wallet_capability().read().await.addresses() {
             let encoded_ua = address.encode(&self.config.chain);
             objectified_addresses.push(object! {
             "address" => encoded_ua,
@@ -733,10 +709,13 @@ impl LightClient {
     }
 
     pub async fn do_seed_phrase(&self) -> Result<JsonValue, &str> {
-        Ok(object! {
-            "seed"     => self.wallet.mnemonic().to_string(),
-            "birthday" => self.wallet.get_birthday().await
-        })
+        match self.wallet.mnemonic() {
+            Some(m) => Ok(object! {
+                "seed"     => m.to_string(),
+                "birthday" => self.wallet.get_birthday().await
+            }),
+            None => Err("This wallet is watch-only."),
+        }
     }
 
     /// Return a list of all notes, spent and unspent
@@ -746,7 +725,7 @@ impl LightClient {
         let mut pending_sapling_notes: Vec<JsonValue> = vec![];
 
         let anchor_height = BlockHeight::from_u32(self.wallet.get_anchor_height().await);
-        let unified_spend_capability_arc = self.wallet.unified_spend_capability();
+        let unified_spend_capability_arc = self.wallet.wallet_capability();
         let unified_spend_capability = &unified_spend_capability_arc.read().await;
 
         {
@@ -792,7 +771,7 @@ impl LightClient {
         let mut spent_orchard_notes: Vec<JsonValue> = vec![];
         let mut pending_orchard_notes: Vec<JsonValue> = vec![];
 
-        let unified_spend_auth_arc = self.wallet.unified_spend_capability();
+        let unified_spend_auth_arc = self.wallet.wallet_capability();
         let unified_spend_auth = &unified_spend_auth_arc.read().await;
         {
             self.wallet.transaction_context.transaction_metadata_set.read().await.current.iter()
@@ -931,7 +910,7 @@ impl LightClient {
         };
 
         match self.wallet.decrypt_message(data).await {
-            Some(m) => {
+            Ok(m) => {
                 let memo_bytes: MemoBytes = m.memo.clone().into();
                 object! {
                     "to" => encode_payment_address(self.config.hrp_sapling_address(), &m.to),
@@ -939,13 +918,13 @@ impl LightClient {
                     "memohex" => hex::encode(memo_bytes.as_slice())
                 }
             }
-            None => object! { "error" => "Couldn't decrypt with any of the wallet's keys"},
+            Err(_) => object! { "error" => "Couldn't decrypt with any of the wallet's keys"},
         }
     }
 
     pub async fn do_list_transactions(&self, include_memo_hex: bool) -> JsonValue {
         // Create a list of TransactionItems from wallet transactions
-        let unified_spend_capability_arc = self.wallet.unified_spend_capability();
+        let unified_spend_capability_arc = self.wallet.wallet_capability();
         let unified_spend_capability = &unified_spend_capability_arc.read().await;
         let mut transaction_list = self
             .wallet
@@ -1045,7 +1024,7 @@ impl LightClient {
         &'a self,
         transaction_metadata: &'b TransactionMetadata,
         include_memo_hex: &'b bool,
-        unified_spend_auth: &'c UnifiedSpendCapability,
+        unified_spend_auth: &'c WalletCapability,
     ) -> impl Iterator<Item = JsonValue> + 'b
     where
         'a: 'b,
@@ -1069,7 +1048,7 @@ impl LightClient {
         &'a self,
         transaction_metadata: &'b TransactionMetadata,
         include_memo_hex: &'b bool,
-        unified_spend_auth: &'c UnifiedSpendCapability,
+        unified_spend_auth: &'c WalletCapability,
     ) -> impl Iterator<Item = JsonValue> + 'b
     where
         'a: 'b,
@@ -1122,7 +1101,7 @@ impl LightClient {
 
         let new_address = self
             .wallet
-            .unified_spend_capability()
+            .wallet_capability()
             .write()
             .await
             .new_address(desired_receivers)?;
@@ -1207,7 +1186,7 @@ impl LightClient {
                 let lc1 = lci.clone();
 
                 let h1 = tokio::spawn(async move {
-                    let key = lc1.wallet.unified_spend_capability();
+                    let key = lc1.wallet.wallet_capability();
                     let transaction_metadata_set = lc1
                         .wallet
                         .transaction_context
@@ -1476,7 +1455,7 @@ impl LightClient {
         // Local state necessary for a transaction fetch
         let transaction_context = TransactionContext::new(
             &self.config,
-            self.wallet.unified_spend_capability(),
+            self.wallet.wallet_capability(),
             self.wallet.transactions(),
         );
         let (
@@ -1500,7 +1479,7 @@ impl LightClient {
         // Do Trial decryptions of all the sapling outputs, and pass on the successful ones to the update_notes processor
         let trial_decryptions_processor = TrialDecryptions::new(
             Arc::new(self.config.clone()),
-            self.wallet.unified_spend_capability(),
+            self.wallet.wallet_capability(),
             self.wallet.transactions(),
         );
         let (trial_decrypts_handle, trial_decrypts_transmitter) = trial_decryptions_processor
@@ -1538,7 +1517,7 @@ impl LightClient {
 
         // 1. Fetch the transparent txns only after reorgs are done.
         let taddr_transactions_handle = FetchTaddrTransactions::new(
-            self.wallet.unified_spend_capability(),
+            self.wallet.wallet_capability(),
             Arc::new(self.config.clone()),
         )
         .start(
@@ -1656,12 +1635,7 @@ impl LightClient {
         }
 
         let addr = address.unwrap_or(
-            self.wallet
-                .unified_spend_capability()
-                .read()
-                .await
-                .addresses()[0]
-                .encode(&self.config.chain),
+            self.wallet.wallet_capability().read().await.addresses()[0].encode(&self.config.chain),
         );
 
         let result = {

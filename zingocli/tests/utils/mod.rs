@@ -62,7 +62,7 @@ pub mod scenarios {
     pub mod setup {
         use super::{data, ChildProcessHandler, RegtestManager};
         use std::path::PathBuf;
-        use zingolib::lightclient::LightClient;
+        use zingolib::{lightclient::LightClient, wallet::WalletBase};
         pub struct ScenarioBuilder {
             pub test_env: TestEnvironmentGenerator,
             pub regtest_manager: RegtestManager,
@@ -150,10 +150,11 @@ pub mod scenarios {
                 let (zingo_config, _) = self.make_new_zing_configdir();
                 LightClient::new(&zingo_config, birthday).unwrap()
             }
+
             pub fn build_new_faucet(&mut self, birthday: u64, overwrite: bool) -> LightClient {
                 let (zingo_config, _) = self.make_new_zing_configdir();
-                LightClient::create_with_seedorkey_wallet(
-                    self.seed.clone(),
+                LightClient::new_from_wallet_base(
+                    WalletBase::MnemonicPhrase(self.seed.clone()),
                     &zingo_config,
                     birthday,
                     overwrite,
@@ -163,13 +164,18 @@ pub mod scenarios {
 
             pub fn build_newseed_client(
                 &mut self,
-                seed: String,
+                mnemonic_phrase: String,
                 birthday: u64,
                 overwrite: bool,
             ) -> LightClient {
                 let (zingo_config, _) = self.make_new_zing_configdir();
-                LightClient::create_with_seedorkey_wallet(seed, &zingo_config, birthday, overwrite)
-                    .unwrap()
+                LightClient::new_from_wallet_base(
+                    WalletBase::MnemonicPhrase(mnemonic_phrase),
+                    &zingo_config,
+                    birthday,
+                    overwrite,
+                )
+                .unwrap()
             }
         }
         pub struct TestEnvironmentGenerator {
