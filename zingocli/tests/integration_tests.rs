@@ -47,6 +47,9 @@ fn test_scanning_in_watch_only_mode() {
         let mut fake_compactblock_list = FakeCompactBlockList::new(0);
         let wc = lightclient.wallet.wallet_capability().read().await.clone();
 
+        */
+        let wc = faucet.extract_unified_capability().read().await.clone();
+        /*
         // create a coinbase transaction
         let extfvk: SaplingFvk = (&wc).try_into().unwrap();
         let value = 1_111_000;
