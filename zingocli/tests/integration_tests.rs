@@ -314,7 +314,7 @@ fn zcashd_sapling_commitment_tree() {
     //!  TODO:  Make this test assert something, what is this a test of?
     //!  TODO:  Add doc-comment explaining what constraints this test
     //!  enforces
-    let (regtest_manager, child_process_handler, _client_builder) = scenarios::sapling_faucet();
+    let (regtest_manager, child_process_handler, _faucet) = scenarios::faucet_only();
     let trees = regtest_manager
         .get_cli_handle()
         .args(["z_gettreestate", "1"])
@@ -408,8 +408,7 @@ fn actual_empty_zcashd_sapling_commitment_tree() {
 
 #[test]
 fn mine_sapling_to_self() {
-    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::sapling_faucet();
-    let faucet = client_builder.build_new_faucet(0, false);
+    let (regtest_manager, child_process_handler, faucet) = scenarios::faucet_only();
     Runtime::new().unwrap().block_on(async {
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
@@ -490,8 +489,7 @@ fn send_mined_sapling_to_orchard() {
     //! debiting unverified_orchard_balance and crediting verified_orchard_balance.  The debit amount is
     //! consistent with all the notes in the relevant block changing state.
     //! NOTE that the balance doesn't give insight into the distribution across notes.
-    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::sapling_faucet();
-    let faucet = client_builder.build_new_faucet(0, false);
+    let (regtest_manager, child_process_handler, faucet) = scenarios::faucet_only();
     Runtime::new().unwrap().block_on(async {
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
@@ -641,7 +639,7 @@ fn note_selection_order() {
 #[test]
 fn from_t_z_o_tz_to_zo_tzo_to_orchard() {
     //! Test all possible promoting note source combinations
-    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::sapling_faucet();
+    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::faucet_only();
     let sapling_faucet = client_builder.build_new_faucet(0, false);
     let pool_migration_client =
         client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
@@ -895,51 +893,50 @@ fn from_t_z_o_tz_to_zo_tzo_to_orchard() {
 }
 #[test]
 fn send_orchard_back_and_forth() {
-    let (regtest_manager, client_a, client_b, child_process_handler, _) =
-        scenarios::two_clients_one_saplingcoinbase_backed();
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
     Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &client_a, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
-        client_a
+        faucet
             .do_send(vec![(
-                &get_base_address!(client_b, "unified"),
+                &get_base_address!(recipient, "unified"),
                 10_000,
                 Some("Orcharding".to_string()),
             )])
             .await
             .unwrap();
 
-        utils::increase_height_and_sync_client(&regtest_manager, &client_b, 5).await;
-        client_a.do_sync(true).await.unwrap();
+        utils::increase_height_and_sync_client(&regtest_manager, &recipient, 5).await;
+        faucet.do_sync(true).await.unwrap();
 
         // Regtest is generating notes with a block reward of 625_000_000 zats.
         assert_eq!(
-            client_a.do_balance().await["orchard_balance"],
+            faucet.do_balance().await["orchard_balance"],
             625_000_000 - 10_000 - u64::from(DEFAULT_FEE)
         );
-        assert_eq!(client_b.do_balance().await["orchard_balance"], 10_000);
+        assert_eq!(recipient.do_balance().await["orchard_balance"], 10_000);
 
-        client_b
+        recipient
             .do_send(vec![(
-                &get_base_address!(client_a, "unified"),
+                &get_base_address!(faucet, "unified"),
                 5_000,
                 Some("Sending back".to_string()),
             )])
             .await
             .unwrap();
 
-        utils::increase_height_and_sync_client(&regtest_manager, &client_a, 3).await;
-        client_b.do_sync(true).await.unwrap();
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 3).await;
+        recipient.do_sync(true).await.unwrap();
 
         assert_eq!(
-            client_a.do_balance().await["orchard_balance"],
+            faucet.do_balance().await["orchard_balance"],
             625_000_000 - 10_000 - u64::from(DEFAULT_FEE) + 5_000
         );
-        assert_eq!(client_b.do_balance().await["sapling_balance"], 0);
-        assert_eq!(client_b.do_balance().await["orchard_balance"], 4_000);
+        assert_eq!(recipient.do_balance().await["sapling_balance"], 0);
+        assert_eq!(recipient.do_balance().await["orchard_balance"], 4_000);
         println!(
             "{}",
-            json::stringify_pretty(client_a.do_list_transactions(false).await, 4)
+            json::stringify_pretty(faucet.do_list_transactions(false).await, 4)
         );
 
         // Unneeded, but more explicit than having child_process_handler be an
@@ -950,25 +947,21 @@ fn send_orchard_back_and_forth() {
 
 #[test]
 fn diversified_addresses_receive_funds_in_best_pool() {
-    let (regtest_manager, client_a, client_b, child_process_handler, _) =
-        scenarios::two_clients_one_saplingcoinbase_backed();
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
     Runtime::new().unwrap().block_on(async {
-        client_b.do_new_address("o").await.unwrap();
-        client_b.do_new_address("zo").await.unwrap();
-        client_b.do_new_address("z").await.unwrap();
+        recipient.do_new_address("o").await.unwrap();
+        recipient.do_new_address("zo").await.unwrap();
+        recipient.do_new_address("z").await.unwrap();
 
-        utils::increase_height_and_sync_client(&regtest_manager, &client_a, 5).await;
-        let addresses = client_b.do_addresses().await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
+        let addresses = recipient.do_addresses().await;
         let address_5000_nonememo_tuples = addresses
             .members()
             .map(|ua| (ua["address"].as_str().unwrap(), 5_000, None))
             .collect::<Vec<(&str, u64, Option<String>)>>();
-        client_a
-            .do_send(address_5000_nonememo_tuples)
-            .await
-            .unwrap();
-        utils::increase_height_and_sync_client(&regtest_manager, &client_b, 5).await;
-        let balance_b = client_b.do_balance().await;
+        faucet.do_send(address_5000_nonememo_tuples).await.unwrap();
+        utils::increase_height_and_sync_client(&regtest_manager, &recipient, 5).await;
+        let balance_b = recipient.do_balance().await;
         assert_eq!(
             balance_b,
             json::object! {
@@ -1015,7 +1008,7 @@ fn rescan_still_have_outgoing_metadata() {
 
 #[test]
 fn rescan_still_have_outgoing_metadata_with_sends_to_self() {
-    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::sapling_faucet();
+    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::faucet_only();
     let faucet = client_builder.build_new_faucet(0, false);
     Runtime::new().unwrap().block_on(async {
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
@@ -1065,10 +1058,11 @@ fn rescan_still_have_outgoing_metadata_with_sends_to_self() {
 /// An arbitrary number of diversified addresses may be generated
 /// from a seed.  If the wallet is subsequently lost-or-destroyed
 /// wallet-regeneration-from-seed (sprouting) doesn't regenerate
-/// the previous diversifier list.
+/// the previous diversifier list. <-- But the spend capability
+/// is capable of recovering the diversified _receiver_.
 #[test]
 fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
-    let (regtest_manager, sender, recipient, child_process_handler, mut client_builder) =
+    let (regtest_manager, faucet, recipient, child_process_handler, mut client_builder) =
         scenarios::two_clients_one_saplingcoinbase_backed();
     let mut expected_unspent_sapling_notes = json::object! {
 
@@ -1090,13 +1084,13 @@ fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
         8edj6n8ltk45sdkptlk7rtzlm4uup4laq8ka8vtxzqemj3yhk6hqhuypupzryhv66w65lah9ms03xa8nref7gux2zz\
         hjnfanxnnrnwscmz6szv2ghrurhu3jsqdx25y2yh";
     let seed_of_recipient = Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &sender, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
         assert_eq!(
             &get_base_address!(recipient, "unified"),
             &original_recipient_address
         );
         let recipient_addr = recipient.do_new_address("tz").await.unwrap();
-        sender
+        faucet
             .do_send(vec![(
                 recipient_addr[0].as_str().unwrap(),
                 5_000,
@@ -1104,7 +1098,7 @@ fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
             )])
             .await
             .unwrap();
-        utils::increase_height_and_sync_client(&regtest_manager, &sender, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
         recipient.do_sync(true).await.unwrap();
         let notes = recipient.do_list_notes(true).await;
         assert_eq!(notes["unspent_sapling_notes"].members().len(), 1);
@@ -1159,16 +1153,16 @@ fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
         //The first address in a wallet should always contain all three currently extant
         //receiver types.
         recipient_restored
-            .do_send(vec![(&get_base_address!(sender, "unified"), 4_000, None)])
+            .do_send(vec![(&get_base_address!(faucet, "unified"), 4_000, None)])
             .await
             .unwrap();
-        let sender_balance = sender.do_balance().await;
-        utils::increase_height_and_sync_client(&regtest_manager, &sender, 5).await;
+        let sender_balance = faucet.do_balance().await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
         //Ensure that recipient_restored was still able to spend the note, despite not having the
         //diversified address associated with it
         assert_eq!(
-            sender.do_balance().await["spendable_orchard_balance"],
+            faucet.do_balance().await["spendable_orchard_balance"],
             sender_balance["spendable_orchard_balance"]
                 .as_u64()
                 .unwrap()
@@ -1182,7 +1176,7 @@ fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
 
 #[test]
 fn ensure_taddrs_from_old_seeds_work() {
-    let (_regtest_manager, child_process_handler, mut client_builder) = scenarios::sapling_faucet();
+    let (_regtest_manager, child_process_handler, mut client_builder) = scenarios::faucet_only();
     // The first taddr generated on commit 9e71a14eb424631372fd08503b1bd83ea763c7fb
     let transparent_address = "tmFLszfkjgim4zoUMAXpuohnFBAKy99rr2i";
 
