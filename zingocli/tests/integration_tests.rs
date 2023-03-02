@@ -63,9 +63,11 @@ fn test_scanning_in_watch_only_mode() {
         mine_numblocks_each_with_two_sap_txs(&mut fake_compactblock_list, &data, &lightclient, 5).await;
 
         // test that we have the transaction
-        let list = lightclient.do_list_transactions(false).await;
-        assert_eq!(list[0]["txid"], txid.to_string());
+        */
+        let list = faucet.do_list_transactions(false).await;
+        assert_eq!(list[0]["txid"], "txid".to_string());
         assert_eq!(list[0]["amount"].as_u64().unwrap(), value);
+        /*
         let addr_0 = wc.addresses()[0].clone();
         assert_eq!(list[0]["address"], addr_0.encode(&config.chain));
         assert_eq!(
