@@ -49,10 +49,11 @@ fn test_scanning_in_watch_only_mode() {
 
         */
         let wc = faucet.extract_unified_capability().read().await.clone();
-        /*
         // create a coinbase transaction
+        use zcash_primitives::sapling::keys::DiversifiableFullViewingKey as SaplingFvk;
         let extfvk: SaplingFvk = (&wc).try_into().unwrap();
         let value = 1_111_000;
+        /*
         let (transaction, _height, _note) =
             fake_compactblock_list.create_sapling_coinbase_transaction(&extfvk, value);
         let txid = transaction.txid();
