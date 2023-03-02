@@ -151,6 +151,7 @@ pub mod scenarios {
                 LightClient::new(&zingo_config, birthday).unwrap()
             }
             pub fn build_new_faucet(&mut self, birthday: u64, overwrite: bool) -> LightClient {
+                //! A "faucet" is a lightclient that receives mining rewards
                 let (zingo_config, _) = self.make_new_zing_configdir();
                 LightClient::new_from_wallet_base(
                     WalletBase::MnemonicPhrase(self.seed.clone()),

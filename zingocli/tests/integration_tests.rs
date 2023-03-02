@@ -337,22 +337,22 @@ fn verify_old_wallet_uses_server_height_in_send() {
     //! "mempool height" which is the server_height + 1
     let (regtest_manager, child_process_handler, mut client_builder) =
         scenarios::sapling_funded_client();
-    let client_sending = client_builder.build_new_faucet(0, false);
+    let faucet = client_builder.build_new_faucet(0, false);
     let client_receiving =
         client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
     Runtime::new().unwrap().block_on(async {
         // Ensure that the client has confirmed spendable funds
-        utils::increase_height_and_sync_client(&regtest_manager, &client_sending, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
         // Without sync push server forward 100 blocks
         utils::increase_server_height(&regtest_manager, 100).await;
-        let client_wallet_height = client_sending.do_wallet_last_scanned_height().await;
+        let client_wallet_height = faucet.do_wallet_last_scanned_height().await;
 
         // Verify that wallet is still back at 6.
         assert_eq!(client_wallet_height, 6);
 
         // Interrupt generating send
-        client_sending
+        faucet
             .do_send(vec![(
                 &get_base_address!(client_receiving, "unified"),
                 10_000,
@@ -415,11 +415,11 @@ fn actual_empty_zcashd_sapling_commitment_tree() {
 fn mine_sapling_to_self() {
     let (regtest_manager, child_process_handler, mut client_builder) =
         scenarios::sapling_funded_client();
-    let client = client_builder.build_new_faucet(0, false);
+    let faucet = client_builder.build_new_faucet(0, false);
     Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &client, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
-        let balance = client.do_balance().await;
+        let balance = faucet.do_balance().await;
         assert_eq!(balance["sapling_balance"], 3_750_000_000u64);
     });
     drop(child_process_handler);
@@ -502,22 +502,22 @@ fn send_mined_sapling_to_orchard() {
     //! NOTE that the balance doesn't give insight into the distribution across notes.
     let (regtest_manager, child_process_handler, mut client_builder) =
         scenarios::sapling_funded_client();
-    let client = client_builder.build_new_faucet(0, false);
+    let faucet = client_builder.build_new_faucet(0, false);
     Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &client, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
         let amount_to_send = 5_000;
-        client
+        faucet
             .do_send(vec![(
-                get_base_address!(client, "unified").as_str(),
+                get_base_address!(faucet, "unified").as_str(),
                 amount_to_send,
                 Some("Scenario test: engage!".to_string()),
             )])
             .await
             .unwrap();
 
-        utils::increase_height_and_sync_client(&regtest_manager, &client, 4).await;
-        let balance = client.do_balance().await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 4).await;
+        let balance = faucet.do_balance().await;
         // We send change to orchard now, so we should have the full value of the note
         // we spent, minus the transaction fee
         assert_eq!(balance["unverified_orchard_balance"], 0);
@@ -655,7 +655,7 @@ fn from_t_z_o_tz_to_zo_tzo_to_orchard() {
     //! Test all possible promoting note source combinations
     let (regtest_manager, child_process_handler, mut client_builder) =
         scenarios::sapling_funded_client();
-    let sapling_fund_source = client_builder.build_new_faucet(0, false);
+    let sapling_faucet = client_builder.build_new_faucet(0, false);
     let pool_migration_client =
         client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
     Runtime::new().unwrap().block_on(async {
@@ -663,9 +663,9 @@ fn from_t_z_o_tz_to_zo_tzo_to_orchard() {
         let pmc_sapling = get_base_address!(pool_migration_client, "sapling");
         let pmc_unified = get_base_address!(pool_migration_client, "unified");
         // Ensure that the client has confirmed spendable funds
-        utils::increase_height_and_sync_client(&regtest_manager, &sapling_fund_source, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &sapling_faucet, 5).await;
         // 1 t Test of a send from a taddr only client to its own unified address
-        sapling_fund_source
+        sapling_faucet
             .do_send(vec![(&pmc_taddr, 5_000, None)])
             .await
             .unwrap();
@@ -692,7 +692,7 @@ fn from_t_z_o_tz_to_zo_tzo_to_orchard() {
             4_000
         );
         // 2 Test of a send from a sapling only client to its own unified address
-        sapling_fund_source
+        sapling_faucet
             .do_send(vec![(&pmc_sapling, 5_000, None)])
             .await
             .unwrap();
@@ -799,7 +799,7 @@ fn from_t_z_o_tz_to_zo_tzo_to_orchard() {
             3_000
         );
         // 6 sapling and orchard to orchard
-        sapling_fund_source
+        sapling_faucet
             .do_send(vec![(&pmc_sapling, 2_000, None)])
             .await
             .unwrap();
@@ -834,7 +834,7 @@ fn from_t_z_o_tz_to_zo_tzo_to_orchard() {
             0_000
         );
         // 7 tzo --> o
-        sapling_fund_source
+        sapling_faucet
             .do_send(vec![(&pmc_taddr, 2_000, None), (&pmc_sapling, 2_000, None)])
             .await
             .unwrap();
@@ -1030,16 +1030,16 @@ fn rescan_still_have_outgoing_metadata() {
 fn rescan_still_have_outgoing_metadata_with_sends_to_self() {
     let (regtest_manager, child_process_handler, mut client_builder) =
         scenarios::sapling_funded_client();
-    let client = client_builder.build_new_faucet(0, false);
+    let faucet = client_builder.build_new_faucet(0, false);
     Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &client, 5).await;
-        let sapling_addr = get_base_address!(client, "sapling");
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
+        let sapling_addr = get_base_address!(faucet, "sapling");
         for memo in [None, Some("foo")] {
-            client
+            faucet
                 .do_send(vec![(
                     sapling_addr.as_str(),
                     {
-                        let balance = client.do_balance().await;
+                        let balance = faucet.do_balance().await;
                         balance["spendable_sapling_balance"].as_u64().unwrap()
                             + balance["spendable_orchard_balance"].as_u64().unwrap()
                     } - 1_000,
@@ -1047,13 +1047,13 @@ fn rescan_still_have_outgoing_metadata_with_sends_to_self() {
                 )])
                 .await
                 .unwrap();
-            utils::increase_height_and_sync_client(&regtest_manager, &client, 5).await;
+            utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
         }
-        let transactions = client.do_list_transactions(false).await;
-        let notes = client.do_list_notes(true).await;
-        client.do_rescan().await.unwrap();
-        let post_rescan_transactions = client.do_list_transactions(false).await;
-        let post_rescan_notes = client.do_list_notes(true).await;
+        let transactions = faucet.do_list_transactions(false).await;
+        let notes = faucet.do_list_notes(true).await;
+        faucet.do_rescan().await.unwrap();
+        let post_rescan_transactions = faucet.do_list_transactions(false).await;
+        let post_rescan_notes = faucet.do_list_notes(true).await;
         assert_eq!(
             transactions,
             post_rescan_transactions,
