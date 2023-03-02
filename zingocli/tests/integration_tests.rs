@@ -639,7 +639,7 @@ fn note_selection_order() {
 #[test]
 fn from_t_z_o_tz_to_zo_tzo_to_orchard() {
     //! Test all possible promoting note source combinations
-    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::faucet_only();
+    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::custom_clients();
     let sapling_faucet = client_builder.build_new_faucet(0, false);
     let pool_migration_client =
         client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
@@ -984,22 +984,21 @@ fn diversified_addresses_receive_funds_in_best_pool() {
 
 #[test]
 fn rescan_still_have_outgoing_metadata() {
-    let (regtest_manager, client_one, client_two, child_process_handler, _) =
-        scenarios::two_clients_one_saplingcoinbase_backed();
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
     Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &client_one, 5).await;
-        client_one
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
+        faucet
             .do_send(vec![(
-                get_base_address!(client_two, "sapling").as_str(),
+                get_base_address!(recipient, "sapling").as_str(),
                 1_000,
                 Some("foo".to_string()),
             )])
             .await
             .unwrap();
-        utils::increase_height_and_sync_client(&regtest_manager, &client_one, 5).await;
-        let transactions = client_one.do_list_transactions(false).await;
-        client_one.do_rescan().await.unwrap();
-        let post_rescan_transactions = client_one.do_list_transactions(false).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
+        let transactions = faucet.do_list_transactions(false).await;
+        faucet.do_rescan().await.unwrap();
+        let post_rescan_transactions = faucet.do_list_transactions(false).await;
         assert_eq!(transactions, post_rescan_transactions);
 
         drop(child_process_handler);
@@ -1008,8 +1007,7 @@ fn rescan_still_have_outgoing_metadata() {
 
 #[test]
 fn rescan_still_have_outgoing_metadata_with_sends_to_self() {
-    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::faucet_only();
-    let faucet = client_builder.build_new_faucet(0, false);
+    let (regtest_manager, child_process_handler, faucet) = scenarios::faucet_only();
     Runtime::new().unwrap().block_on(async {
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
         let sapling_addr = get_base_address!(faucet, "sapling");
@@ -1062,8 +1060,12 @@ fn rescan_still_have_outgoing_metadata_with_sends_to_self() {
 /// is capable of recovering the diversified _receiver_.
 #[test]
 fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
-    let (regtest_manager, faucet, recipient, child_process_handler, mut client_builder) =
-        scenarios::two_clients_one_saplingcoinbase_backed();
+    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::custom_clients();
+    let faucet = client_builder.build_new_faucet(0, false);
+    let seed_phrase_of_recipient1 = zcash_primitives::zip339::Mnemonic::from_entropy([1; 32])
+        .unwrap()
+        .to_string();
+    let recipient1 = client_builder.build_newseed_client(seed_phrase_of_recipient1, 0, false);
     let mut expected_unspent_sapling_notes = json::object! {
 
             "created_in_block" =>  7,
@@ -1086,10 +1088,10 @@ fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
     let seed_of_recipient = Runtime::new().unwrap().block_on(async {
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
         assert_eq!(
-            &get_base_address!(recipient, "unified"),
+            &get_base_address!(recipient1, "unified"),
             &original_recipient_address
         );
-        let recipient_addr = recipient.do_new_address("tz").await.unwrap();
+        let recipient_addr = recipient1.do_new_address("tz").await.unwrap();
         faucet
             .do_send(vec![(
                 recipient_addr[0].as_str().unwrap(),
@@ -1099,8 +1101,8 @@ fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
             .await
             .unwrap();
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
-        recipient.do_sync(true).await.unwrap();
-        let notes = recipient.do_list_notes(true).await;
+        recipient1.do_sync(true).await.unwrap();
+        let notes = recipient1.do_list_notes(true).await;
         assert_eq!(notes["unspent_sapling_notes"].members().len(), 1);
         let note = notes["unspent_sapling_notes"].members().next().unwrap();
         //The following fields aren't known until runtime, and should be cryptographically nondeterministic
@@ -1115,9 +1117,9 @@ fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
             json::stringify_pretty(expected_unspent_sapling_notes.clone(), 4),
             json::stringify_pretty(note.clone(), 4)
         );
-        recipient.do_seed_phrase().await.unwrap()
+        recipient1.do_seed_phrase().await.unwrap()
     });
-    drop(recipient); // Discard original to ensure subsequent data is fresh.
+    drop(recipient1); // Discard original to ensure subsequent data is fresh.
     let mut expected_unspent_sapling_notes_after_restore_from_seed =
         expected_unspent_sapling_notes.clone();
     expected_unspent_sapling_notes_after_restore_from_seed["address"] = JsonValue::String(
@@ -1176,7 +1178,7 @@ fn handling_of_nonregenerated_diversified_addresses_after_seed_restore() {
 
 #[test]
 fn ensure_taddrs_from_old_seeds_work() {
-    let (_regtest_manager, child_process_handler, mut client_builder) = scenarios::faucet_only();
+    let (_regtest_manager, child_process_handler, mut client_builder) = scenarios::custom_clients();
     // The first taddr generated on commit 9e71a14eb424631372fd08503b1bd83ea763c7fb
     let transparent_address = "tmFLszfkjgim4zoUMAXpuohnFBAKy99rr2i";
 
@@ -1228,16 +1230,15 @@ fn cross_compat() {
 
 #[test]
 fn t_incoming_t_outgoing() {
-    let (regtest_manager, sender, recipient, child_process_handler, _client_builder) =
-        scenarios::two_clients_one_saplingcoinbase_backed();
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &sender, 9).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 9).await;
         // 2. Get an incoming transaction to a t address
         let taddr = get_base_address!(recipient, "transparent");
         let value = 100_000;
 
-        sender
+        faucet
             .do_send(vec![(taddr.as_str(), value, None)])
             .await
             .unwrap();
@@ -1364,18 +1365,17 @@ fn t_incoming_t_outgoing() {
 
 #[test]
 fn send_to_ua_saves_full_ua_in_wallet() {
-    let (regtest_manager, sender, recipient, child_process_handler, _client_builder) =
-        scenarios::two_clients_one_saplingcoinbase_backed();
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &sender, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
         let recipient_unified_address = get_base_address!(recipient, "unified");
         let sent_value = 50_000;
-        sender
+        faucet
             .do_send(vec![(recipient_unified_address.as_str(), sent_value, None)])
             .await
             .unwrap();
-        utils::increase_height_and_sync_client(&regtest_manager, &sender, 3).await;
-        let list = sender.do_list_transactions(false).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 3).await;
+        let list = faucet.do_list_transactions(false).await;
         assert!(list.members().any(|transaction| {
             transaction.entries().any(|(key, value)| {
                 if key == "outgoing_metadata" {
@@ -1385,8 +1385,8 @@ fn send_to_ua_saves_full_ua_in_wallet() {
                 }
             })
         }));
-        sender.do_rescan().await.unwrap();
-        let new_list = sender.do_list_transactions(false).await;
+        faucet.do_rescan().await.unwrap();
+        let new_list = faucet.do_list_transactions(false).await;
         assert!(new_list.members().any(|transaction| {
             transaction.entries().any(|(key, value)| {
                 if key == "outgoing_metadata" {
