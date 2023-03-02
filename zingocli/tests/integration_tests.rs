@@ -10,7 +10,7 @@ use tokio::runtime::Runtime;
 use utils::scenarios;
 
 #[test]
-fn test_scanning_in_watch_only_mode() {
+fn test_scanning_in_watch_only_modetest_scanning_in_watch_only_mode() {
     // # Scenario:
     // 1. fill wallet with a coinbase transaction
     // 2. send a transaction contaning all types of outputs
@@ -335,11 +335,7 @@ fn verify_old_wallet_uses_server_height_in_send() {
     //! interrupting send, it made it immediately obvious that this was
     //! the wrong height to use!  The correct height is the
     //! "mempool height" which is the server_height + 1
-    let (regtest_manager, child_process_handler, mut client_builder) =
-        scenarios::sapling_funded_client();
-    let faucet = client_builder.build_new_faucet(0, false);
-    let client_receiving =
-        client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
     Runtime::new().unwrap().block_on(async {
         // Ensure that the client has confirmed spendable funds
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
@@ -354,7 +350,7 @@ fn verify_old_wallet_uses_server_height_in_send() {
         // Interrupt generating send
         faucet
             .do_send(vec![(
-                &get_base_address!(client_receiving, "unified"),
+                &get_base_address!(recipient, "unified"),
                 10_000,
                 Some("Interrupting sync!!".to_string()),
             )])

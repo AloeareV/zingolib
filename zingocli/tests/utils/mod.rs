@@ -55,7 +55,7 @@ async fn check_wallet_chainheight_value(client: &LightClient, target: u32) -> bo
 }
 #[cfg(test)]
 pub mod scenarios {
-    use crate::data::{self, REGSAP_ADDR_FROM_ABANDONART};
+    use crate::data::{self, seeds::HOSPITAL_MUSEUM_SEED, REGSAP_ADDR_FROM_ABANDONART};
 
     use zingo_cli::regtest::{ChildProcessHandler, RegtestManager};
     use zingolib::lightclient::LightClient;
@@ -271,6 +271,29 @@ pub mod scenarios {
         )
     }
 
+    pub fn faucet_recipient() -> (
+        RegtestManager,
+        ChildProcessHandler,
+        LightClient,
+        LightClient,
+    ) {
+        let mut sb = setup::ScenarioBuilder::new();
+        //tracing_subscriber::fmt::init();
+        sb.test_env
+            .create_funded_zcash_conf(REGSAP_ADDR_FROM_ABANDONART);
+        sb.test_env.create_lightwalletd_conf();
+        sb.launch();
+        let faucet = sb.client_builder.build_new_faucet(0, false);
+        let recipient =
+            sb.client_builder
+                .build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
+        (
+            sb.regtest_manager,
+            sb.child_process_handler.unwrap(),
+            faucet,
+            recipient,
+        )
+    }
     #[cfg(feature = "cross_version")]
     pub fn saplingcoinbasebacked_spendcapable_cross_version(
     ) -> (RegtestManager, ChildProcessHandler, LightClient, String) {
