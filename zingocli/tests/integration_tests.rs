@@ -532,17 +532,16 @@ fn note_selection_order() {
     //! In addition to testing the order in which notes are selected this test:
     //!   * sends to a sapling address
     //!   * sends back to the original sender's UA
-    let (regtest_manager, client_1, client_2, child_process_handler, _) =
-        scenarios::two_clients_one_saplingcoinbase_backed();
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
 
     Runtime::new().unwrap().block_on(async {
-        utils::increase_height_and_sync_client(&regtest_manager, &client_1, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
-        let client_2_saplingaddress = get_base_address!(client_2, "sapling");
+        let client_2_saplingaddress = get_base_address!(recipient, "sapling");
         // Send three transfers in increasing 1000 zat increments
         // These are sent from the coinbase funded client which will
         // subequently receive funding via it's orchard-packed UA.
-        client_1
+        faucet
             .do_send(
                 (1..=3)
                     .map(|n| {
@@ -557,19 +556,19 @@ fn note_selection_order() {
             .await
             .unwrap();
 
-        utils::increase_height_and_sync_client(&regtest_manager, &client_2, 5).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &recipient, 5).await;
         // We know that the largest single note that 2 received from 1 was 3000, for 2 to send
         // 3000 back to 1 it will have to collect funds from two notes to pay the full 3000
         // plus the transaction fee.
-        client_2
+        recipient
             .do_send(vec![(
-                &get_base_address!(client_1, "unified"),
+                &get_base_address!(faucet, "unified"),
                 3000,
                 Some("Sending back, should have 2 inputs".to_string()),
             )])
             .await
             .unwrap();
-        let client_2_notes = client_2.do_list_notes(false).await;
+        let client_2_notes = recipient.do_list_notes(false).await;
         // The 3000 zat note to cover the value, plus another for the tx-fee.
         let first_value = client_2_notes["pending_sapling_notes"][0]["value"]
             .as_fixed_point_u64(0)
@@ -606,8 +605,8 @@ fn note_selection_order() {
         // After sync the unspent_sapling_notes should go to 3000.
         assert_eq!(non_change_note_values.iter().sum::<u64>(), 1000u64);
 
-        utils::increase_height_and_sync_client(&regtest_manager, &client_2, 5).await;
-        let client_2_post_transaction_notes = client_2.do_list_notes(false).await;
+        utils::increase_height_and_sync_client(&regtest_manager, &recipient, 5).await;
+        let client_2_post_transaction_notes = recipient.do_list_notes(false).await;
         assert_eq!(
             client_2_post_transaction_notes["pending_sapling_notes"].len(),
             0
