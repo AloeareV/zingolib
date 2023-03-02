@@ -257,7 +257,7 @@ pub mod scenarios {
     /// and zcashd (in regtest mode). This setup is intended to produce the most basic  
     /// of scenarios.  As scenarios with even less requirements
     /// become interesting (e.g. without experimental features, or txindices) we'll create more setups.
-    pub fn sapling_funded_client() -> (RegtestManager, ChildProcessHandler, setup::ClientManager) {
+    pub fn sapling_faucet() -> (RegtestManager, ChildProcessHandler, setup::ClientManager) {
         let mut sb = setup::ScenarioBuilder::new();
         //tracing_subscriber::fmt::init();
         sb.test_env
@@ -336,7 +336,7 @@ pub mod scenarios {
         ChildProcessHandler,
         setup::ClientManager,
     ) {
-        let (regtest_manager, child_process_handler, mut client_builder) = sapling_funded_client();
+        let (regtest_manager, child_process_handler, mut client_builder) = sapling_faucet();
         let client_one = client_builder.build_new_faucet(0, false);
         let seed_phrase_of_two = zcash_primitives::zip339::Mnemonic::from_entropy([1; 32])
             .unwrap()
