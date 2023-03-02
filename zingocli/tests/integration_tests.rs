@@ -10,7 +10,7 @@ use tokio::runtime::Runtime;
 use utils::scenarios;
 
 #[test]
-fn test_scanning_in_watch_only_modetest_scanning_in_watch_only_mode() {
+fn test_scanning_in_watch_only_mode() {
     // # Scenario:
     // 1. fill wallet with a coinbase transaction
     // 2. send a transaction contaning all types of outputs
@@ -30,6 +30,7 @@ fn test_scanning_in_watch_only_modetest_scanning_in_watch_only_mode() {
     // wait for test server to start
     //let (data, config, ready_receiver, _stop_transmitter, _test_server_handle) =
     //create_test_server().await;
+    let (regtest_manager, child_process_handler, faucet) = scenarios::faucet_only();
 
     Runtime::new().unwrap().block_on(async {
         /*
