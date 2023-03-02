@@ -421,10 +421,7 @@ fn mine_sapling_to_self() {
 
 #[test]
 fn unspent_notes_are_not_saved() {
-    let (regtest_manager, child_process_handler, mut client_builder) = scenarios::sapling_faucet();
-    let faucet = client_builder.build_new_faucet(0, false);
-    let client_receiving =
-        client_builder.build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false);
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
     Runtime::new().unwrap().block_on(async {
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 5).await;
 
@@ -432,7 +429,7 @@ fn unspent_notes_are_not_saved() {
         assert_eq!(balance["sapling_balance"], 3_750_000_000u64);
         faucet
             .do_send(vec![(
-                get_base_address!(client_receiving, "unified").as_str(),
+                get_base_address!(recipient, "unified").as_str(),
                 5_000,
                 Some("this note never makes it to the wallet! or chain".to_string()),
             )])
