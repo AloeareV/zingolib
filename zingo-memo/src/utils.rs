@@ -1,54 +1,8 @@
+use std::io::{self, Read, Write};
+
+use zcash_address::unified::{Address, Container, Encoding, Receiver};
 use zcash_client_backend::address::UnifiedAddress;
-
-pub mod memo_serde;
-pub mod utils;
-
-/// A parsed memo. Currently there is only one version of this protocol,
-/// which is a list of UAs. The main use-case for this is to record the
-/// UAs sent from, as the blockchain only records the pool-specific receiver
-/// corresponding to the key we sent with.
-#[non_exhaustive]
-#[derive(Debug)]
-pub enum ParsedMemo {
-    Version0 { uas: Vec<UnifiedAddress> },
-}
-
-/// Packs a list of UAs into a memo. The UA only memo is version 0 of the protocol
-/// Note that a UA's raw representation is 1 byte for length, +21 for a T-receiver,
-/// +44 for a Sapling receiver, and +44 for an Orchard receiver. This totals a maximum
-/// of 110 bytes per UA, and attempting to write more than 510 bytes will cause an error.
-pub fn create_wallet_internal_memo_version_0(uas: &[UnifiedAddress]) -> io::Result<[u8; 511]> {
-    let mut uas_bytes_vec = Vec::new();
-    CompactSize::write(&mut uas_bytes_vec, 0usize)?;
-    Vector::write(&mut uas_bytes_vec, uas, |w, ua| {
-        write_unified_address_to_raw_encoding(ua, w)
-    })?;
-    let mut uas_bytes = [0u8; 511];
-    if uas_bytes_vec.len() > 511 {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Too many uas to fit in memo field",
-        ))
-    } else {
-        uas_bytes[..uas_bytes_vec.len()].copy_from_slice(uas_bytes_vec.as_slice());
-        Ok(uas_bytes)
-    }
-}
-
-/// Attempts to parse the 511 bytes of a version_0 zingo memo
-pub fn parse_zingo_memo(memo: [u8; 511]) -> io::Result<ParsedMemo> {
-    let mut reader: &[u8] = &memo;
-    match CompactSize::read(&mut reader)? {
-        0 => Ok(ParsedMemo::Version0 {
-            uas: Vector::read(&mut reader, |r| read_unified_address_from_raw_encoding(r))?,
-        }),
-        _ => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Received memo from a future version of this protocol.\n\
-            Please ensure your software is up-to-date",
-        )),
-    }
-}
+use zcash_encoding::{CompactSize, Vector};
 
 /// A helper function to encode a UA as a CompactSize specifying the number
 /// of receivers, followed by the UA's raw encoding as specified in
@@ -134,6 +88,3 @@ fn decode_receiver(typecode: usize, data: Vec<u8>) -> io::Result<Receiver> {
         },
     })
 }
-
-#[cfg(test)]
-mod test_vectors;
