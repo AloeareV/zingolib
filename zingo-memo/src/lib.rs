@@ -1,5 +1,5 @@
 use zcash_client_backend::address::UnifiedAddress;
-use zcash_primitives::consensus::BlockHeight;
+use zcash_primitives::consensus::{BlockHeight, MAIN_NETWORK};
 
 pub mod memo_serde;
 pub mod utils;
