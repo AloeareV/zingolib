@@ -74,45 +74,10 @@ fn test_scanning_in_watch_only_mode() {
         // 2. send a transaction contaning all types of outputs
         faucet.do_send(addr_amount_memos).await.unwrap();
         utils::increase_height_and_sync_client(&regtest_manager, &recipient, 1).await;
-        dbg!(recipient.do_balance().await);
+        assert_eq!(recipient.do_balance().await["transparent_balance"], 1000u64);
+        assert_eq!(recipient.do_balance().await["sapling_balance"], 2000u64);
+        assert_eq!(recipient.do_balance().await["orchard_balance"], 3000u64);
         /*
-        let addr_0 = wc.addresses()[0].clone();
-        assert_eq!(list[0]["address"], addr_0.encode(&config.chain));
-        assert_eq!(
-            lightclient.do_balance().await["sapling_balance"]
-                .as_u64()
-                .unwrap(),
-            value
-        );
-
-        // send a transaction we want to watch
-        let o_addr = addr_0.orchard().clone().unwrap();
-        let s_addr = addr_0.sapling().clone().unwrap();
-        let t_addr = addr_0.transparent().clone().unwrap();
-        let o_addr_str =
-            UAddress::try_from_items(vec![Receiver::Orchard(o_addr.to_raw_address_bytes())])
-                .unwrap()
-                .encode(&config.chain.to_zcash_address_network());
-        let s_addr_str = UAddress::try_from_items(vec![Receiver::Sapling(s_addr.to_bytes())])
-            .unwrap()
-            .encode(&config.chain.to_zcash_address_network());
-        let t_addr_str = address_from_pubkeyhash(&config, Some(t_addr.clone())).unwrap();
-        let sent_o_value = 1_000_000;
-        let sent_s_value = 100_000;
-        let sent_t_value = 10_000;
-        let sent_o_memo = "Some Orchard memo".to_string();
-        let sent_s_memo = "Some Sapling memo".to_string();
-        let tos = vec![
-            (&o_addr_str[..], sent_o_value, Some(sent_o_memo.clone())),
-            (&s_addr_str[..], sent_s_value, Some(sent_s_memo.clone())),
-            (&t_addr_str[..], sent_t_value, None),
-        ];
-        lightclient.test_do_send(tos).await.unwrap();
-
-        // confirm that transaction
-        fake_compactblock_list.add_pending_sends(&data).await;
-        mine_pending_blocks(&mut fake_compactblock_list, &data, &lightclient).await;
-        mine_numblocks_each_with_two_sap_txs(&mut fake_compactblock_list, &data, &lightclient, 5).await;
 
         // check that the wallet has received the transansaction
         {
