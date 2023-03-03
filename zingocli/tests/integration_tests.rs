@@ -30,7 +30,7 @@ fn test_scanning_in_watch_only_mode() {
     // wait for test server to start
     //let (data, config, ready_receiver, _stop_transmitter, _test_server_handle) =
     //create_test_server().await;
-    let (regtest_manager, child_process_handler, faucet) = scenarios::faucet_only();
+    let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
 
     Runtime::new().unwrap().block_on(async {
         /*
@@ -64,9 +64,20 @@ fn test_scanning_in_watch_only_mode() {
 
         // test that we have the transaction
         */
-        let list = faucet.do_list_transactions(false).await;
-        assert_eq!(list[0]["txid"], "txid".to_string());
-        assert_eq!(list[0]["amount"].as_u64().unwrap(), value);
+        let (recipient_taddr, recipient_sapling, recipient_unified) = (
+            get_base_address!(recipient, "transparent"),
+            get_base_address!(recipient, "sapling"),
+            get_base_address!(recipient, "unified"),
+        );
+        let addr_amount_memos = vec![
+            (recipient_taddr.as_str(), 1_000u64, None),
+            (recipient_sapling.as_str(), 2_000u64, None),
+            (recipient_unified.as_str(), 3_000u64, None),
+        ];
+        utils::increase_height_and_sync_client(&regtest_manager, &faucet, 1).await;
+        faucet.do_send(addr_amount_memos).await.unwrap();
+        utils::increase_height_and_sync_client(&regtest_manager, &recipient, 1).await;
+        dbg!(recipient.do_balance().await);
         /*
         let addr_0 = wc.addresses()[0].clone();
         assert_eq!(list[0]["address"], addr_0.encode(&config.chain));
