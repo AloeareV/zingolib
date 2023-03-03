@@ -12,8 +12,6 @@ use utils::scenarios;
 #[test]
 fn test_scanning_in_watch_only_mode() {
     // # Scenario:
-    // 1. fill wallet with a coinbase transaction
-    // 2. send a transaction contaning all types of outputs
     // 3. reset wallet
     // 4. for every combination of FVKs
     //     4.1. init a wallet with UFVK
@@ -27,9 +25,6 @@ fn test_scanning_in_watch_only_mode() {
     // - wallet will not detect funds on internal addresses
     //   see: https://github.com/zingolabs/zingolib/issues/246
 
-    // wait for test server to start
-    //let (data, config, ready_receiver, _stop_transmitter, _test_server_handle) =
-    //create_test_server().await;
     let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
 
     Runtime::new().unwrap().block_on(async {
@@ -74,7 +69,9 @@ fn test_scanning_in_watch_only_mode() {
             (recipient_sapling.as_str(), 2_000u64, None),
             (recipient_unified.as_str(), 3_000u64, None),
         ];
+        // 1. fill wallet with a coinbase transaction by syncing faucet with 1-block increase
         utils::increase_height_and_sync_client(&regtest_manager, &faucet, 1).await;
+        // 2. send a transaction contaning all types of outputs
         faucet.do_send(addr_amount_memos).await.unwrap();
         utils::increase_height_and_sync_client(&regtest_manager, &recipient, 1).await;
         dbg!(recipient.do_balance().await);
