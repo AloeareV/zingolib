@@ -28,37 +28,10 @@ fn test_scanning_in_watch_only_mode() {
     let (regtest_manager, child_process_handler, faucet, recipient) = scenarios::faucet_recipient();
 
     Runtime::new().unwrap().block_on(async {
-        /*
-        ready_receiver.await.unwrap();
-
-        let lightclient = LightClient::test_new(
-            &config,
-            WalletBase::MnemonicPhrase(TEST_SEED.to_string()),
-            0,
-        )
-        .await
-        .unwrap();
-
-        let mut fake_compactblock_list = FakeCompactBlockList::new(0);
-        let wc = lightclient.wallet.wallet_capability().read().await.clone();
-
-        */
         let wc = faucet.extract_unified_capability().read().await.clone();
         // create a coinbase transaction
         use zcash_primitives::sapling::keys::DiversifiableFullViewingKey as SaplingFvk;
         let extfvk: SaplingFvk = (&wc).try_into().unwrap();
-        let value = 1_111_000;
-        /*
-        let (transaction, _height, _note) =
-            fake_compactblock_list.create_sapling_coinbase_transaction(&extfvk, value);
-        let txid = transaction.txid();
-
-        // make the coinbase transaction spendable
-        mine_pending_blocks(&mut fake_compactblock_list, &data, &lightclient).await;
-        mine_numblocks_each_with_two_sap_txs(&mut fake_compactblock_list, &data, &lightclient, 5).await;
-
-        // test that we have the transaction
-        */
         let (recipient_taddr, recipient_sapling, recipient_unified) = (
             get_base_address!(recipient, "transparent"),
             get_base_address!(recipient, "sapling"),
@@ -92,6 +65,12 @@ fn test_scanning_in_watch_only_mode() {
         }
 
         // check that do_rescan works
+        */
+        recipient.do_rescan().await.unwrap();
+        assert_eq!(recipient.do_balance().await["transparent_balance"], 1000u64);
+        assert_eq!(recipient.do_balance().await["sapling_balance"], 2000u64);
+        assert_eq!(recipient.do_balance().await["orchard_balance"], 3000u64);
+        /*
         lightclient.do_rescan().await.unwrap();
         {
             let balance = lightclient.do_balance().await;
@@ -191,7 +170,7 @@ fn test_scanning_in_watch_only_mode() {
         }
         */
     });
-    //drop(child_process_handler);
+    drop(child_process_handler);
 }
 
 /*
