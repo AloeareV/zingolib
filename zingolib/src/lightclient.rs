@@ -1531,6 +1531,31 @@ impl LightClient {
 
         // Re-read the last scanned height
         let last_scanned_height = self.wallet.last_synced_height().await;
+        let latest_blockid = GrpcConnector::get_latest_block(self.config.get_server_uri()).await?;
+
+        let grpc_client = Arc::new(GrpcConnector::new(self.config.get_server_uri()));
+        let mut block_stream = grpc_client
+            .stream_block_range(last_scanned_height, latest_blockid.height)
+            .await?;
+        for i in (last_scanned_height..latest_blockid.height).rev() {
+            let next_block = block_stream
+                .message()
+                .await
+                .map_err(|e| format!("{e}"))?
+                .ok_or_else(|| String::from("No block {i}"))?;
+            assert_eq!(i, next_block.height);
+        }
+
+        drop(lightclient_exclusion_lock);
+        todo!()
+    }
+
+    /// Start syncing in batches with the max size, to manage memory consumption.
+    async fn start_sync(&self) -> Result<JsonValue, String> {
+        let lightclient_exclusion_lock = self.setup_for_sync().await?;
+        // Re-read the last scanned height
+        let last_scanned_height = self.wallet.last_synced_height().await;
+        let latest_blockid = GrpcConnector::get_latest_block(self.config.get_server_uri()).await?;
         let batch_size = 100;
 
         let mut latest_block_batches = vec![];
