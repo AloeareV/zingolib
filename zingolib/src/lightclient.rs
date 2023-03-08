@@ -1539,6 +1539,9 @@ impl LightClient {
                 .stream_block_range(first_unscanned_height, latest_blockid.height)
                 .await
         )?;
+
+        // Thos fetches all the blocks in one chunk, which isn't very efficient
+        // TODO: Optimize
         let mut blocks = <Streaming<_> as StreamExt>::collect::<Vec<_>>(block_stream)
             .await
             .into_iter()
@@ -1548,6 +1551,22 @@ impl LightClient {
                 .next()
                 .ok_or_else(|| String::from("No block {i}"))?
                 .map_err(|e| format!("error reading block: {e:#?}"))?;
+
+            let height = next_block.height();
+            for transaction in next_block.vtx {
+                // Change only goes to Orchard, so the relevant memo payload will be
+                // in an orchard Action.
+                // After we handle memo-sync, we'll use regular sync to go the rest of
+                // the way up the chain
+                let decrypted_actions = try_compact_note_decryption(
+                    &[ivk.clone()],
+                    &transaction
+                        .actions
+                        .iter()
+                        .map(|action| (action.domain(self.config.chain, height), action.clone()))
+                        .collect::<Vec<_>>(),
+                );
+            }
         }
 
         drop(lightclient_exclusion_lock);
