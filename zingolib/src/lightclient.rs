@@ -729,7 +729,7 @@ impl LightClient {
                                 "created_in_block"   => created_block,
                                 "datetime"           => transaction_metadata.datetime,
                                 "created_in_txid"    => format!("{}", transaction_id.clone()),
-                                "value"              => note_metadata.note.value().inner(),
+                                "value"              => note_metadata.note.value,
                                 "unconfirmed"        => transaction_metadata.unconfirmed,
                                 "is_change"          => note_metadata.is_change,
                                 "address"            => address,
@@ -928,7 +928,7 @@ impl LightClient {
                         .sapling_notes
                         .iter()
                         .filter(|nd| nd.is_change)
-                        .map(|nd| nd.note.value().inner())
+                        .map(|nd| nd.note.value)
                         .sum::<u64>()
                         + wallet_transaction
                         .orchard_notes
