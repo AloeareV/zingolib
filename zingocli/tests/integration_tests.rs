@@ -1558,7 +1558,8 @@ async fn witness_clearing() {
     drop(child_process_handler);
 }
 
-/*async fn mempool_clearing() {
+#[tokio::test]
+async fn mempool_clearing() {
     let value = 100_000;
     let (regtest_manager, child_process_handler, faucet, recipient, orig_transaction_id) =
         scenarios::faucet_prefunded_orchard_recipient(value).await;
@@ -1568,12 +1569,13 @@ async fn witness_clearing() {
         utils::send_value_between_clients_and_sync(
             &regtest_manager,
             &faucet,
-            &faucet,
+            &recipient,
             5_000,
-            "orchard",
+            "unified",
         )
         .await;
     }
+    /*
     assert_eq!(
         recipient.do_maybe_recent_txid().await["last_txid"],
         orig_transaction_id
@@ -1698,8 +1700,9 @@ async fn witness_clearing() {
     );
     assert_eq!(notes["pending_sapling_notes"].len(), 0);
     assert_eq!(transactions.len(), 1);
-}*/
-
+    */
+    drop(child_process_handler);
+}
 #[tokio::test]
 async fn sapling_incoming_sapling_outgoing() {
     let (regtest_manager, child_process_handler, faucet, recipient) =
