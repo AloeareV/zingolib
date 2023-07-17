@@ -6,7 +6,7 @@ use crate::wallet::data::{SpendableSaplingNote, TransactionMetadata};
 
 use bip0039::Mnemonic;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use futures::lock::Mutex;
+use futures::lock::{Mutex, MutexGuard};
 use futures::Future;
 use incrementalmerkletree::frontier::CommitmentTree;
 use json::JsonValue;
@@ -459,18 +459,13 @@ impl LightWallet {
         &self,
         orchard_notes: &[SpendableOrchardNote],
         target_height: BlockHeight,
+        tree_lock: &ShardTree<
+            SqliteShardStore<rusqlite::Connection, MerkleHashOrchard, MAX_SHARD_DEPTH>,
+            COMMITMENT_TREE_DEPTH,
+            MAX_SHARD_DEPTH,
+        >,
     ) -> Result<Anchor, String> {
         if let Some(note) = orchard_notes.get(0) {
-            let txmds_readlock = self
-                .transaction_context
-                .transaction_metadata_set
-                .read()
-                .await;
-            let tree_lock = txmds_readlock
-                .witness_trees
-                .witness_tree_orchard
-                .lock()
-                .await;
             Ok(orchard::Anchor::from(
                 tree_lock
                     .root_at_checkpoint(REORG_BUFFER_OFFSET as usize)
@@ -1047,9 +1042,24 @@ impl LightWallet {
             return Err(e);
         }
         println!("Selected notes worth {}", u64::from(selected_value));
+        let txmds_readlock = self
+            .transaction_context
+            .transaction_metadata_set
+            .read()
+            .await;
+        let orchard_tree_lock = txmds_readlock
+            .witness_trees
+            .witness_tree_orchard
+            .lock()
+            .await;
+        let sapling_tree_lock = txmds_readlock
+            .witness_trees
+            .witness_tree_sapling
+            .lock()
+            .await;
 
         let orchard_anchor = self
-            .get_orchard_anchor(&orchard_notes, latest_wallet_height)
+            .get_orchard_anchor(&orchard_notes, latest_wallet_height, &orchard_tree_lock)
             .await?;
         let mut builder = Builder::new(
             self.transaction_context.config.chain,
@@ -1101,7 +1111,9 @@ impl LightWallet {
                 selected.extsk.clone().unwrap(),
                 selected.diversifier,
                 selected.note.clone(),
-                selected.witness.path().unwrap(),
+                sapling_tree_lock
+                    .witness(selected.witnessed_position, REORG_BUFFER_OFFSET as usize)
+                    .map_err(|e| e.to_string())?,
             ) {
                 let e = format!("Error adding note: {:?}", e);
                 error!("{}", e);
@@ -1111,11 +1123,14 @@ impl LightWallet {
 
         for selected in orchard_notes.iter() {
             println!("Adding orchard spend");
-            let path = selected.witness.path().unwrap();
             if let Err(e) = builder.add_orchard_spend::<transaction::fees::fixed::FeeRule>(
                 selected.spend_key.unwrap(),
                 selected.note,
-                orchard::tree::MerklePath::from(path),
+                orchard::tree::MerklePath::from(
+                    orchard_tree_lock
+                        .witness(selected.witnessed_position, REORG_BUFFER_OFFSET as usize)
+                        .map_err(|e| e.to_string())?,
+                ),
             ) {
                 let e = format!("Error adding note: {:?}", e);
                 error!("{}", e);
