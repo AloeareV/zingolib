@@ -386,6 +386,7 @@ impl TrialDecryptions {
                             note,
                             to,
                             have_spending_key,
+                            i,
                         );
 
                         debug!("Trial decrypt Detected txid {}", &transaction_id);
