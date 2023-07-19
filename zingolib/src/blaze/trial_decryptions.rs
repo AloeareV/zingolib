@@ -419,6 +419,7 @@ impl TrialDecryptions {
                             note,
                             to,
                             have_spending_key,
+                            Some(spend_nullifier),
                             i,
                         );
 
