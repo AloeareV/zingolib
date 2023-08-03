@@ -1053,7 +1053,6 @@ impl LightClient {
 
         // Mark the sync data as finished, which should clear everything
         self.bsync_data.read().await.finish().await;
-        println!("Done sync");
         sync_result
     }
 
@@ -1378,7 +1377,6 @@ impl LightClient {
 
     /// Start syncing in batches with the max size, to manage memory consumption.
     async fn start_sync(&self) -> Result<JsonValue, String> {
-        println!("\n\nStarting sync!\n\n");
         // We can only do one sync at a time because we sync blocks in serial order
         // If we allow multiple syncs, they'll all get jumbled up.
         // TODO:  We run on resource constrained systems, where a single thread of
@@ -1479,10 +1477,9 @@ impl LightClient {
         // The top of the wallet
         let last_synced_height = self.wallet.last_synced_height().await;
 
-        dbg!(
+        debug!(
             "Latest block is {}, wallet block is {}",
-            start_block,
-            last_synced_height
+            start_block, last_synced_height
         );
 
         if last_synced_height == start_block {
