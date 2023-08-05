@@ -371,8 +371,8 @@ impl LightWallet {
                 |(transaction_id, note): (transaction::TxId, &D::WalletNote)| -> Option <D::SpendableNoteAT> {
                     // Filter out notes that are already spent
                     if note.spent().is_some()
-                        || note.unconfirmed_spent().is_some()
-                        || note.is_pending()
+                        || note.pending_spent().is_some()
+                        || note.pending_receipt()
                     {
                         None
                     } else {
@@ -1483,7 +1483,8 @@ impl LightWallet {
         #[allow(clippy::type_complexity)]
         let filters: &[Box<dyn Fn(&&D::WalletNote, &TransactionMetadata) -> bool>] =
             &[Box::new(|nnmd, transaction| {
-                transaction.block_height > BlockHeight::from_u32(anchor_height) || nnmd.is_pending()
+                transaction.block_height > BlockHeight::from_u32(anchor_height)
+                    || nnmd.pending_receipt()
             })];
         self.shielded_balance::<D>(target_addr, filters)
             .await
@@ -1501,7 +1502,7 @@ impl LightWallet {
             Box::new(|_, transaction| {
                 transaction.block_height <= BlockHeight::from_u32(anchor_height)
             }),
-            Box::new(|nnmd, _| !nnmd.is_pending()),
+            Box::new(|nnmd, _| !nnmd.pending_receipt()),
         ];
         self.shielded_balance::<D>(target_addr, filters)
             .await
