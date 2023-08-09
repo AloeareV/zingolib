@@ -2570,8 +2570,8 @@ async fn load_old_wallet_at_reorged_height() {
         .join("zingo-testutils")
         .join("data")
         .join("old_wallet_reorg_test_wallet");
-    let zcd_source = cached_data_dir.join("zcash").to_string_lossy().to_string();
-    let zcd_dest = zcd_datadir.to_string_lossy().to_string();
+    let zcd_source = dbg!(cached_data_dir.join("zcash").to_string_lossy().to_string());
+    let zcd_dest = dbg!(zcd_datadir.to_string_lossy().to_string());
     std::process::Command::new("cp")
         .arg("-rf")
         .arg(zcd_source)
@@ -2590,6 +2590,7 @@ async fn load_old_wallet_at_reorged_height() {
         .output()
         .expect("wallet copy failed");
     let _cph = regtest_manager.launch(false).unwrap();
+    println!("{}", faucet.do_info().await);
     zingo_testutils::increase_height_and_sync_client(regtest_manager, faucet, 10)
         .await
         .unwrap();
@@ -2599,6 +2600,7 @@ async fn load_old_wallet_at_reorged_height() {
     println!("{}", recipient.do_list_transactions().await.pretty(2));
     recipient.do_sync(false).await.unwrap();
     println!("{}", recipient.do_list_transactions().await.pretty(2));
+    println!("{}", recipient.do_info().await);
 }
 
 #[tokio::test]
