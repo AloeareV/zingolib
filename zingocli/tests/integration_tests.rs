@@ -2699,4 +2699,48 @@ async fn send_to_transparent_and_sapling_maintain_balance() {
     }
 }
 
+#[tokio::test]
+async fn write_down_this_wallet_not_A_ttest() {
+    let (ref regtest_manager, _cph, ref faucet, ref recipient, _txid) =
+        scenarios::faucet_prefunded_orchard_recipient(100_000).await;
+    zingo_testutils::increase_height_and_sync_client(regtest_manager, faucet, 4)
+        .await
+        .unwrap();
+    zingo_testutils::send_value_between_clients_and_sync(
+        regtest_manager,
+        faucet,
+        recipient,
+        50_000,
+        "unified",
+    )
+    .await
+    .unwrap();
+    drop(_cph); // turn off zcashd and lightwalletd
+    let _cph = regtest_manager.launch(false).unwrap();
+
+    let zcd_datadir = &regtest_manager.zcashd_data_dir;
+    let zcashd_parent = Path::new(zcd_datadir).parent().unwrap();
+    let original_zcashd_directory = zcashd_parent.join("original_zcashd");
+    let source = &zcd_datadir.to_string_lossy().to_string();
+    let dest = &original_zcashd_directory.to_string_lossy().to_string();
+    std::process::Command::new("cp")
+        .arg("-rf")
+        .arg(source)
+        .arg(dest)
+        .output()
+        .expect("directory copy failed");
+
+    zingo_testutils::send_value_between_clients_and_sync(
+        regtest_manager,
+        faucet,
+        recipient,
+        30_000,
+        "unified",
+    )
+    .await
+    .unwrap();
+    recipient.do_sync(false).await.unwrap();
+    recipient.do_save().await.unwrap();
+}
+
 pub const TEST_SEED: &str = "chimney better bulb horror rebuild whisper improve intact letter giraffe brave rib appear bulk aim burst snap salt hill sad merge tennis phrase raise";
