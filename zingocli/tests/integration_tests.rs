@@ -1689,9 +1689,27 @@ async fn mempool_clearing() {
         .unwrap()
     );
 
+    println!(
+        "pre-drop: {:?}",
+        regtest_manager
+            .get_cli_handle()
+            .arg("getblockchaininfo")
+            .output()
+            .unwrap()
+            .stdout
+    );
     // Turn zcashd off and on again, to write down the blocks
     drop(_cph); // turn off zcashd and lightwalletd
     let _cph = regtest_manager.launch(false).unwrap();
+    println!(
+        "post-drop: {:?}",
+        regtest_manager
+            .get_cli_handle()
+            .arg("getblockchaininfo")
+            .output()
+            .unwrap()
+            .stdout
+    );
     log::debug!(
         "new zcashd chain info {}",
         std::str::from_utf8(
@@ -2700,7 +2718,7 @@ async fn send_to_transparent_and_sapling_maintain_balance() {
 }
 
 #[tokio::test]
-async fn write_down_this_wallet_not_A_ttest() {
+async fn write_down_this_wallet_not_a_test() {
     let (ref regtest_manager, _cph, ref faucet, ref recipient, _txid) =
         scenarios::faucet_prefunded_orchard_recipient(100_000).await;
     zingo_testutils::increase_height_and_sync_client(regtest_manager, faucet, 4)
@@ -2715,8 +2733,32 @@ async fn write_down_this_wallet_not_A_ttest() {
     )
     .await
     .unwrap();
+    println!(
+        "pre-drop: {}",
+        std::str::from_utf8(
+            &regtest_manager
+                .get_cli_handle()
+                .arg("getblockchaininfo")
+                .output()
+                .unwrap()
+                .stdout
+        )
+        .unwrap()
+    );
     drop(_cph); // turn off zcashd and lightwalletd
     let _cph = regtest_manager.launch(false).unwrap();
+    println!(
+        "post-drop: {}",
+        std::str::from_utf8(
+            &regtest_manager
+                .get_cli_handle()
+                .arg("getblockchaininfo")
+                .output()
+                .unwrap()
+                .stdout
+        )
+        .unwrap()
+    );
 
     let zcd_datadir = &regtest_manager.zcashd_data_dir;
     let zcashd_parent = Path::new(zcd_datadir).parent().unwrap();
