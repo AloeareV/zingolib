@@ -2789,7 +2789,7 @@ async fn write_down_this_wallet_not_a_test() {
     std::fs::create_dir(source).expect("Directory recreate failed");
     std::process::Command::new("cp")
         .arg("-r")
-        .arg(dest)
+        .arg(format!("{}/.", dest))
         .arg(source)
         .output()
         .expect("directory copy failed");
