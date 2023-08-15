@@ -2746,6 +2746,78 @@ async fn write_down_this_wallet_not_a_test() {
         .unwrap()
     );
     drop(_cph); // turn off zcashd and lightwalletd
+    let zcd_datadir = &regtest_manager.zcashd_data_dir;
+    let zcashd_parent = Path::new(zcd_datadir).parent().unwrap();
+    let original_zcashd_directory = zcashd_parent.join("original_zcashd");
+    let source = &dbg!(zcd_datadir.to_string_lossy().to_string());
+    let dest = &dbg!(original_zcashd_directory.to_string_lossy().to_string());
+    std::process::Command::new("cp")
+        .arg("-r")
+        .arg(source)
+        .arg(dest)
+        .output()
+        .expect("directory copy failed");
+    println!(
+        "{}",
+        std::str::from_utf8(
+            &std::process::Command::new("ls")
+                .arg("-haRl")
+                .arg(source)
+                .output()
+                .unwrap()
+                .stdout
+        )
+        .unwrap()
+    );
+    println!(
+        "{}",
+        std::str::from_utf8(
+            &std::process::Command::new("ls")
+                .arg("-haRl")
+                .arg(dest)
+                .output()
+                .unwrap()
+                .stdout
+        )
+        .unwrap()
+    );
+    std::process::Command::new("rm")
+        .arg("-r")
+        .arg(source)
+        .output()
+        .expect("Directory rm failed");
+    std::fs::create_dir(source).expect("Directory recreate failed");
+    std::process::Command::new("cp")
+        .arg("-r")
+        .arg(dest)
+        .arg(source)
+        .output()
+        .expect("directory copy failed");
+    println!(
+        "{}",
+        std::str::from_utf8(
+            &std::process::Command::new("ls")
+                .arg("-haRl")
+                .arg(source)
+                .output()
+                .unwrap()
+                .stdout
+        )
+        .unwrap()
+    );
+    println!(
+        "{}",
+        std::str::from_utf8(
+            &std::process::Command::new("ls")
+                .arg("-haRl")
+                .arg(dest)
+                .output()
+                .unwrap()
+                .stdout
+        )
+        .unwrap()
+    );
+
     let _cph = regtest_manager.launch(false).unwrap();
     println!(
         "post-drop: {}",
@@ -2759,18 +2831,6 @@ async fn write_down_this_wallet_not_a_test() {
         )
         .unwrap()
     );
-
-    let zcd_datadir = &regtest_manager.zcashd_data_dir;
-    let zcashd_parent = Path::new(zcd_datadir).parent().unwrap();
-    let original_zcashd_directory = zcashd_parent.join("original_zcashd");
-    let source = &zcd_datadir.to_string_lossy().to_string();
-    let dest = &original_zcashd_directory.to_string_lossy().to_string();
-    std::process::Command::new("cp")
-        .arg("-rf")
-        .arg(source)
-        .arg(dest)
-        .output()
-        .expect("directory copy failed");
 
     zingo_testutils::send_value_between_clients_and_sync(
         regtest_manager,
