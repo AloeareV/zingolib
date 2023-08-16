@@ -2757,68 +2757,8 @@ async fn write_down_this_wallet_not_a_test() {
         .arg(dest)
         .output()
         .expect("directory copy failed");
-    println!(
-        "{}",
-        std::str::from_utf8(
-            &std::process::Command::new("ls")
-                .arg("-haRl")
-                .arg(source)
-                .output()
-                .unwrap()
-                .stdout
-        )
-        .unwrap()
-    );
-    println!(
-        "{}",
-        std::str::from_utf8(
-            &std::process::Command::new("ls")
-                .arg("-haRl")
-                .arg(dest)
-                .output()
-                .unwrap()
-                .stdout
-        )
-        .unwrap()
-    );
-    std::process::Command::new("rm")
-        .arg("-r")
-        .arg(source)
-        .output()
-        .expect("Directory rm failed");
-    std::fs::create_dir(source).expect("Directory recreate failed");
-    std::process::Command::new("cp")
-        .arg("-r")
-        .arg(format!("{}/.", dest))
-        .arg(source)
-        .output()
-        .expect("directory copy failed");
-    println!(
-        "{}",
-        std::str::from_utf8(
-            &std::process::Command::new("ls")
-                .arg("-haRl")
-                .arg(source)
-                .output()
-                .unwrap()
-                .stdout
-        )
-        .unwrap()
-    );
-    println!(
-        "{}",
-        std::str::from_utf8(
-            &std::process::Command::new("ls")
-                .arg("-haRl")
-                .arg(dest)
-                .output()
-                .unwrap()
-                .stdout
-        )
-        .unwrap()
-    );
 
-    let _cph = regtest_manager.launch(false).unwrap();
+    let cph = regtest_manager.launch(false).unwrap();
     println!(
         "post-drop: {}",
         std::str::from_utf8(
@@ -2843,6 +2783,38 @@ async fn write_down_this_wallet_not_a_test() {
     .unwrap();
     recipient.do_sync(false).await.unwrap();
     recipient.do_save().await.unwrap();
+
+    drop(cph); // turn off zcashd and lightwalletd
+               //restore chain from backup, without latest send
+    std::process::Command::new("rm")
+        .arg("-r")
+        .arg(source)
+        .output()
+        .expect("Directory rm failed");
+    std::fs::create_dir(source).expect("Directory recreate failed");
+    std::process::Command::new("cp")
+        .arg("-r")
+        .arg(format!("{}/.", dest))
+        .arg(source)
+        .output()
+        .expect("directory copy failed");
+
+    let cph = regtest_manager.launch(false).unwrap();
+    zingo_testutils::increase_server_height(regtest_manager, 10).await;
+    drop(cph); // turn off zcashd and lightwalletd
+               //delete the backup, and save a newer one
+    std::process::Command::new("rm")
+        .arg("-r")
+        .arg(dest)
+        .output()
+        .expect("Directory rm failed");
+    std::fs::create_dir(dest).expect("Directory recreate failed");
+    std::process::Command::new("cp")
+        .arg("-r")
+        .arg(source)
+        .arg(dest)
+        .output()
+        .expect("directory copy failed");
 }
 
 pub const TEST_SEED: &str = "chimney better bulb horror rebuild whisper improve intact letter giraffe brave rib appear bulk aim burst snap salt hill sad merge tennis phrase raise";
