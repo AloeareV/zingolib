@@ -1780,7 +1780,7 @@ async fn mempool_clearing_and_full_batch_syncs_correct_trees() {
         }
     }
     let value = 100_000;
-    let (regtest_manager, _cph, faucet, recipient, orig_transaction_id) =
+    let (regtest_manager, child_process_handler, faucet, recipient, orig_transaction_id) =
         scenarios::faucet_prefunded_orchard_recipient(value).await;
 
     assert_eq!(
@@ -1827,8 +1827,8 @@ async fn mempool_clearing_and_full_batch_syncs_correct_trees() {
     );
 
     // Turn zcashd off and on again, to write down the blocks
-    drop(_cph); // turn off zcashd and lightwalletd
-    let _cph = regtest_manager.launch(false).unwrap();
+    drop(child_process_handler); // turn off zcashd and lightwalletd
+    let child_process_handler = regtest_manager.launch(false).unwrap();
     log::debug!(
         "new zcashd chain info {}",
         std::str::from_utf8(
@@ -1910,7 +1910,7 @@ async fn mempool_clearing_and_full_batch_syncs_correct_trees() {
     assert_eq!(post_sync_notes_before, notes_before);
     assert_eq!(post_sync_transactions_before, transactions_before);
 
-    drop(_cph); // Turn off zcashd and lightwalletd
+    drop(child_process_handler); // Turn off zcashd and lightwalletd
 
     // 5. check that the sent transaction is correctly marked in the client
     let transactions = recipient.do_list_transactions().await;
