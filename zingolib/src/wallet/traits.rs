@@ -381,7 +381,7 @@ impl Nullifier for zcash_primitives::sapling::Nullifier {
     fn get_nullifiers_of_unspent_notes_from_transaction_set(
         transaction_metadata_set: &TransactionMetadataSet,
     ) -> Vec<(Self, u64, TxId)> {
-        transaction_metadata_set.get_nullifiers_of_unspent_sapling_notes()
+        transaction_metadata_set.get_nullifiers_of_unspent_notes::<SaplingDomain<ChainType>>()
     }
 
     fn get_nullifiers_spent_in_transaction(
@@ -395,7 +395,7 @@ impl Nullifier for orchard::note::Nullifier {
     fn get_nullifiers_of_unspent_notes_from_transaction_set(
         transactions: &TransactionMetadataSet,
     ) -> Vec<(Self, u64, TxId)> {
-        transactions.get_nullifiers_of_unspent_orchard_notes()
+        transactions.get_nullifiers_of_unspent_notes::<OrchardDomain>()
     }
 
     fn get_nullifiers_spent_in_transaction(transaction: &TransactionMetadata) -> &Vec<Self> {
@@ -439,12 +439,12 @@ pub trait ReceivedNoteAndMetadata: Sized {
     fn memo(&self) -> &Option<Memo>;
     fn memo_mut(&mut self) -> &mut Option<Memo>;
     fn note(&self) -> &Self::Note;
-    fn nullifier(&self) -> Self::Nullifier;
-    fn nullifier_mut(&mut self) -> &mut Self::Nullifier;
+    fn nullifier(&self) -> Option<Self::Nullifier>;
+    fn nullifier_mut(&mut self) -> &mut Option<Self::Nullifier>;
     fn output_index(&self) -> &usize;
     fn output_index_mut(&mut self) -> &mut usize;
     fn pending_receipt(&self) -> bool {
-        self.nullifier() == Self::Nullifier::from_bytes([0; 32])
+        self.nullifier().is_none()
     }
     fn pending_spent(&self) -> &Option<(TxId, u32)>;
     fn pool() -> Pool;
@@ -481,7 +481,7 @@ impl ReceivedNoteAndMetadata for ReceivedSaplingNoteAndMetadata {
         &self.diversifier
     }
 
-    fn nullifier_mut(&mut self) -> &mut Self::Nullifier {
+    fn nullifier_mut(&mut self) -> &mut Option<Self::Nullifier> {
         &mut self.nullifier
     }
 
@@ -501,8 +501,7 @@ impl ReceivedNoteAndMetadata for ReceivedSaplingNoteAndMetadata {
             diversifier,
             note,
             witnessed_position,
-            nullifier: nullifier
-                .unwrap_or(zcash_primitives::sapling::Nullifier::from_bytes([0; 32])),
+            nullifier,
             spent,
             unconfirmed_spent,
             memo,
@@ -540,7 +539,7 @@ impl ReceivedNoteAndMetadata for ReceivedSaplingNoteAndMetadata {
         &self.note
     }
 
-    fn nullifier(&self) -> Self::Nullifier {
+    fn nullifier(&self) -> Option<Self::Nullifier> {
         self.nullifier
     }
 
@@ -615,7 +614,7 @@ impl ReceivedNoteAndMetadata for ReceivedOrchardNoteAndMetadata {
         &self.diversifier
     }
 
-    fn nullifier_mut(&mut self) -> &mut Self::Nullifier {
+    fn nullifier_mut(&mut self) -> &mut Option<Self::Nullifier> {
         &mut self.nullifier
     }
 
@@ -635,7 +634,7 @@ impl ReceivedNoteAndMetadata for ReceivedOrchardNoteAndMetadata {
             diversifier,
             note,
             witnessed_position,
-            nullifier: nullifier.unwrap_or(<Self::Nullifier as FromBytes<32>>::from_bytes([0; 32])),
+            nullifier,
             spent,
             unconfirmed_spent,
             memo,
@@ -672,7 +671,7 @@ impl ReceivedNoteAndMetadata for ReceivedOrchardNoteAndMetadata {
         &self.note
     }
 
-    fn nullifier(&self) -> Self::Nullifier {
+    fn nullifier(&self) -> Option<Self::Nullifier> {
         self.nullifier
     }
 
@@ -999,7 +998,7 @@ where
         {
             Some(Self::from_parts_unchecked(
                 transaction_id,
-                note_and_metadata.nullifier(),
+                note_and_metadata.nullifier().unwrap(),
                 *note_and_metadata.diversifier(),
                 note_and_metadata.note().clone(),
                 *note_and_metadata.witnessed_position(),
@@ -1424,7 +1423,17 @@ where
         self.note().write(&mut writer)?;
         writer.write_u64::<LittleEndian>(u64::from(*self.witnessed_position()))?;
 
-        writer.write_all(&self.nullifier().to_bytes())?;
+        writer.write_all(
+            &self
+                .nullifier()
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Attempted to write note without spend_nullifier",
+                    )
+                })?
+                .to_bytes(),
+        )?;
 
         Optional::write(
             &mut writer,
