@@ -117,31 +117,29 @@ impl UpdateNotes {
                         let spent_at_height = BlockHeight::from_u32(spent_height as u32);
 
                         // Mark this note as being spent
-                        let value = wallet_transactions
-                            .write()
-                            .await
-                            .mark_txid_nf_spent(
-                                transaction_id,
-                                &nf,
-                                &spent_transaction_id,
-                                spent_at_height,
-                            )
-                            .expect("Cound not mark note as spent");
-
-                        // Record the future transaction, the one that has spent the nullifiers received in this transaction in the wallet
-                        wallet_transactions
-                            .write()
-                            .await
-                            .add_new_spent(
-                                spent_transaction_id,
-                                spent_at_height,
-                                false,
-                                ts,
-                                nf,
-                                value,
-                                transaction_id,
-                            )
-                            .await;
+                        if let Some(value) = wallet_transactions.write().await.mark_txid_nf_spent(
+                            transaction_id,
+                            &nf,
+                            &spent_transaction_id,
+                            spent_at_height,
+                        ) {
+                            // Record the future transaction, the one that has spent the nullifiers received in this transaction in the wallet
+                            wallet_transactions
+                                .write()
+                                .await
+                                .add_new_spent(
+                                    spent_transaction_id,
+                                    spent_at_height,
+                                    false,
+                                    ts,
+                                    nf,
+                                    value,
+                                    transaction_id,
+                                )
+                                .await;
+                        } else {
+                            todo!()
+                        }
 
                         // Send the future transaction to be fetched too, in case it has only spent nullifiers and not received any change
                         if download_memos != MemoDownloadOption::NoMemos {
