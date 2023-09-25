@@ -780,6 +780,7 @@ impl TransactionMetadataSet {
         have_spending_key: bool,
         nullifier: Option<<D::WalletNote as ReceivedNoteAndMetadata>::Nullifier>,
         output_index: usize,
+        position: Position,
     ) where
         D::Note: PartialEq + Clone,
         D::Recipient: Recipient,
@@ -793,7 +794,7 @@ impl TransactionMetadataSet {
             D::WalletNote::from_parts(
                 D::Recipient::diversifier(&to),
                 note.clone(),
-                Position::from(u64::MAX),
+                position,
                 Some(nullifier.unwrap_or_else(|| {
                     <<D::WalletNote as ReceivedNoteAndMetadata>::Nullifier as FromBytes<
                                 32,
