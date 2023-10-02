@@ -233,7 +233,7 @@ async fn sapling_dust_fee_collection() {
     check_client_balances!(recipient, o: remaining_orchard s: for_sapling t: 0);
 }
 
-use zcash_address::unified::Fvk;
+use zcash_address::unified::{Encoding, Fvk};
 
 use crate::zingo_testutils::check_transaction_equality;
 fn check_expected_balance_with_fvks(
@@ -2719,8 +2719,23 @@ async fn send_to_transparent_and_sapling_maintain_balance() {
 
 #[tokio::test]
 async fn write_down_this_wallet_not_a_test() {
-    let (ref regtest_manager, _cph, ref faucet, ref recipient, _txid) =
-        scenarios::faucet_prefunded_orchard_recipient(100_000).await;
+    let (ref regtest_manager, _cph, mut client_manager) = scenarios::custom_clients();
+    let faucet = &client_manager.build_new_faucet(0, false).await;
+    let recipient = &client_manager
+        .build_newseed_client(HOSPITAL_MUSEUM_SEED.to_string(), 0, false)
+        .await;
+    println!(
+        "{}",
+        recipient
+            .wallet
+            .transaction_context
+            .key
+            .read()
+            .await
+            .ufvk()
+            .unwrap()
+            .encode(&recipient.config().chain.to_zcash_address_network())
+    );
     zingo_testutils::increase_height_and_sync_client(regtest_manager, faucet, 4)
         .await
         .unwrap();

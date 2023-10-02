@@ -42,7 +42,7 @@ use zingoconfig::{ChainType, ZingoConfig};
 #[derive(Clone)]
 pub struct TransactionContext {
     pub(crate) config: ZingoConfig,
-    pub(crate) key: Arc<RwLock<WalletCapability>>,
+    pub key: Arc<RwLock<WalletCapability>>,
     pub transaction_metadata_set: Arc<RwLock<TransactionMetadataSet>>,
 }
 
