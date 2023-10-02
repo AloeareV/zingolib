@@ -1,0 +1,7 @@
+{"app":"lightwalletd","buildDate":"2023-03-31","buildUser":"hazelgrace","gitCommit":"e3d9c11f14673fe1828fa7dc92ba292586a7c565","level":"info","msg":"Starting gRPC server version v0.4.13-11-ge3d9c11 on 127.0.0.1:22282","time":"2023-10-02T20:03:50-03:00"}
+{"app":"lightwalletd","level":"warning","msg":"Starting insecure no-TLS (plaintext) server","time":"2023-10-02T20:03:50-03:00"}
+{"app":"lightwalletd","level":"info","msg":"Got sapling height 1 block height 6 chain regtest branchID c2d6d0b4","time":"2023-10-02T20:03:50-03:00"}
+{"app":"lightwalletd","level":"info","msg":"Found 6 blocks in cache","time":"2023-10-02T20:03:50-03:00"}
+{"app":"lightwalletd","level":"info","msg":"Waiting for block: 7","time":"2023-10-02T20:03:50-03:00"}
+{"app":"lightwalletd","level":"info","msg":"Waiting for block: 17","time":"2023-10-02T20:03:52-03:00"}
+{"app":"lightwalletd","error":"invalid http POST response (nil), method: getbestblockhash, id: 36, last error=Post \"http://127.0.0.1:18502\": dial tcp 127.0.0.1:18502: connect: connection refused","level":"fatal","msg":"error zcashd getbestblockhash rpc","time":"2023-10-02T20:04:17-03:00"}
