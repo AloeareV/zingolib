@@ -2433,7 +2433,8 @@ mod slow {
             ])
             .await
             .unwrap();
-        zingo_testutils::increase_height_and_wait_for_client(regtest_manager, recipient, 1)
+        // syncing multiple batches is important for some bugs
+        zingo_testutils::increase_height_and_wait_for_client(regtest_manager, recipient, 101)
             .await
             .unwrap();
         let pre_rescan_transactions = recipient.do_list_transactions().await;
