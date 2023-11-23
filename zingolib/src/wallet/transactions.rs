@@ -805,9 +805,12 @@ impl TransactionMetadataSet {
                 D::WalletNote::transaction_metadata_notes_mut(transaction_metadata)
                     .retain(|n| n.nullifier().is_some());
             }
-            Some(n) => {
-                // An overwrite should be safe here: TODO: test that confirms this
-                *n = nd;
+            Some(_n) => {
+                eprintln!(
+                    "Tried to add duplicate note at height {}",
+                    u32::from(height)
+                );
+                // The note's already here, we do nothing
             }
         }
     }

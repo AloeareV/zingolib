@@ -2156,7 +2156,10 @@ mod slow {
         // Notes are not in deterministic order after rescan. Insead, iterate over all
         // the notes and check that they exist post-rescan
         for (field_name, field) in notes.entries() {
+            println!("field: {field_name}");
             for note in field.members() {
+                println!("note: {}", json::stringify_pretty(note.clone(), 4));
+
                 assert!(post_rescan_notes[field_name]
                     .members()
                     .any(|post_rescan_note| post_rescan_note == note));
