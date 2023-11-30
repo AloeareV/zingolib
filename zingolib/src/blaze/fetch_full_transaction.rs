@@ -37,7 +37,7 @@ use zcash_primitives::{
     transaction::{Transaction, TxId},
 };
 use zingo_memo::{parse_zingo_memo, ParsedMemo};
-use zingoconfig::{ChainType, ZingoConfig};
+use zingoconfig::ZingoConfig;
 
 #[derive(Clone)]
 pub struct TransactionContext {
@@ -348,7 +348,7 @@ impl TransactionContext {
         outgoing_metadatas: &mut Vec<OutgoingTxData>,
         arbitrary_memos_with_txids: &mut Vec<(ParsedMemo, TxId)>,
     ) {
-        self.scan_bundle::<SaplingDomain<ChainType>>(
+        self.scan_bundle::<SaplingDomain>(
             transaction,
             height,
             pending,

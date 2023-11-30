@@ -33,7 +33,7 @@ use zcash_primitives::{
     sapling::{note_encryption::SaplingDomain, SaplingIvk},
     transaction::{Transaction, TxId},
 };
-use zingoconfig::{ChainType, ZingoConfig};
+use zingoconfig::ZingoConfig;
 
 use super::syncdata::BlazeSyncData;
 
@@ -155,9 +155,7 @@ impl TrialDecryptions {
 
             for (transaction_num, compact_transaction) in compact_block.vtx.iter().enumerate() {
                 let mut sapling_notes_to_mark_position_in_tx =
-                    zip_outputs_with_retention_txids_indexes::<SaplingDomain<ChainType>>(
-                        compact_transaction,
-                    );
+                    zip_outputs_with_retention_txids_indexes::<SaplingDomain>(compact_transaction);
                 let mut orchard_notes_to_mark_position_in_tx =
                     zip_outputs_with_retention_txids_indexes::<OrchardDomain>(compact_transaction);
 
@@ -174,9 +172,7 @@ impl TrialDecryptions {
                 }
                 let mut transaction_metadata = false;
                 if let Some(ref ivk) = sapling_ivk {
-                    Self::trial_decrypt_domain_specific_outputs::<
-                        SaplingDomain<zingoconfig::ChainType>,
-                    >(
+                    Self::trial_decrypt_domain_specific_outputs::<SaplingDomain>(
                         &mut transaction_metadata,
                         compact_transaction,
                         transaction_num,
@@ -242,7 +238,7 @@ impl TrialDecryptions {
             r.map_err(|e| e.to_string())??;
         }
         let mut txmds_writelock = transaction_metadata_set.write().await;
-        update_witnesses::<SaplingDomain<ChainType>>(
+        update_witnesses::<SaplingDomain>(
             sapling_notes_to_mark_position,
             &mut txmds_writelock,
             &wc,

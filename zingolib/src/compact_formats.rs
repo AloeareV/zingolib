@@ -2,7 +2,7 @@ use orchard::{note::ExtractedNoteCommitment, note_encryption::OrchardDomain};
 use zcash_note_encryption::{EphemeralKeyBytes, ShieldedOutput, COMPACT_NOTE_SIZE};
 use zcash_primitives::{
     block::{BlockHash, BlockHeader},
-    consensus::{BlockHeight, Parameters},
+    consensus::BlockHeight,
     sapling::note_encryption::SaplingDomain,
 };
 
@@ -66,7 +66,7 @@ impl CompactBlock {
     }
 }
 
-impl<P: Parameters> ShieldedOutput<SaplingDomain<P>, COMPACT_NOTE_SIZE> for CompactSaplingOutput {
+impl ShieldedOutput<SaplingDomain, COMPACT_NOTE_SIZE> for CompactSaplingOutput {
     fn ephemeral_key(&self) -> EphemeralKeyBytes {
         EphemeralKeyBytes(*slice_to_array(&self.epk))
     }

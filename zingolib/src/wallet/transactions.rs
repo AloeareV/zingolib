@@ -17,7 +17,7 @@ use zcash_primitives::{
     transaction::{components::TxOut, TxId},
 };
 
-use zingoconfig::{ChainType, MAX_REORG};
+use zingoconfig::MAX_REORG;
 
 use crate::error::{ZingoLibError, ZingoLibResult};
 
@@ -232,7 +232,7 @@ impl TransactionMetadataSet {
                     }
                 })
         });
-        self.remove_domain_specific_txids::<SaplingDomain<ChainType>>(&txids_to_remove);
+        self.remove_domain_specific_txids::<SaplingDomain>(&txids_to_remove);
         self.remove_domain_specific_txids::<OrchardDomain>(&txids_to_remove);
     }
 
@@ -477,7 +477,7 @@ impl TransactionMetadataSet {
                     output_index,
                 ),
             PoolNullifier::Sapling(spent_nullifier) => self
-                .add_new_spent_internal::<SaplingDomain<ChainType>>(
+                .add_new_spent_internal::<SaplingDomain>(
                     txid,
                     height,
                     unconfirmed,

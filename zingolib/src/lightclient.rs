@@ -822,7 +822,7 @@ impl LightClient {
     ) -> Result<
         Vec<(
             zcash_client_backend::address::RecipientAddress,
-            zcash_primitives::transaction::components::Amount,
+            zcash_primitives::transaction::components::amount::NonNegativeAmount,
             Option<MemoBytes>,
         )>,
         String,
@@ -845,7 +845,10 @@ impl LightClient {
                 };
 
                 let value =
-                    zcash_primitives::transaction::components::Amount::from_u64(to.1).unwrap();
+                    zcash_primitives::transaction::components::amount::NonNegativeAmount::from_u64(
+                        to.1,
+                    )
+                    .unwrap();
 
                 Ok((ra, value, to.2.clone()))
             })
@@ -873,7 +876,7 @@ impl LightClient {
 
             self.wallet
                 .send_to_addresses(
-                    sapling_prover,
+                    (&sapling_prover, &sapling_prover),
                     vec![crate::wallet::Pool::Orchard, crate::wallet::Pool::Sapling], // This policy doesn't allow
                     // spend from transparent.
                     receivers,
@@ -946,7 +949,7 @@ impl LightClient {
 
             self.wallet
                 .send_to_addresses(
-                    sapling_prover,
+                    (&sapling_prover, &sapling_prover),
                     pools_to_shield.to_vec(),
                     receiver,
                     transaction_submission_height,
@@ -1944,7 +1947,7 @@ impl LightClient {
                         if !all_notes && note_metadata.spent.is_some() {
                             None
                         } else {
-                            let address = LightWallet::note_address::<zcash_primitives::sapling::note_encryption::SaplingDomain<zingoconfig::ChainType>>(&self.config.chain, note_metadata, &self.wallet.wallet_capability());
+                            let address = LightWallet::note_address::<zcash_primitives::sapling::note_encryption::SaplingDomain>(&self.config.chain, note_metadata, &self.wallet.wallet_capability());
                             let spendable = transaction_metadata.block_height <= anchor_height && note_metadata.spent.is_none() && note_metadata.unconfirmed_spent.is_none();
 
                             let created_block:u32 = transaction_metadata.block_height.into();

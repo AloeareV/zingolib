@@ -32,15 +32,16 @@ use zcash_encoding::{Optional, Vector};
 use zcash_note_encryption::Domain;
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
+use zcash_primitives::sapling::prover::{OutputProver, SpendProver};
 use zcash_primitives::sapling::SaplingIvk;
 use zcash_primitives::transaction::builder::Progress;
+use zcash_primitives::transaction::components::amount::NonNegativeAmount;
 use zcash_primitives::transaction::fees::fixed::FeeRule as FixedFeeRule;
 use zcash_primitives::transaction::{self, Transaction};
 use zcash_primitives::{
     consensus::BlockHeight,
     legacy::Script,
     memo::Memo,
-    sapling::prover::TxProver,
     transaction::{
         builder::Builder,
         components::{Amount, OutPoint, TxOut},
@@ -58,7 +59,7 @@ use self::{
     message::Message,
     transactions::TransactionMetadataSet,
 };
-use zingoconfig::{ChainType, ZingoConfig};
+use zingoconfig::ZingoConfig;
 
 pub mod data;
 pub mod keys;
@@ -237,7 +238,11 @@ pub struct LightWallet {
 }
 
 use crate::wallet::traits::{Diversifiable as _, ReadableWriteable};
-type Receivers = Vec<(address::RecipientAddress, Amount, Option<MemoBytes>)>;
+type Receivers = Vec<(
+    address::RecipientAddress,
+    NonNegativeAmount,
+    Option<MemoBytes>,
+)>;
 type TxBuilder<'a> = Builder<'a, zingoconfig::ChainType, OsRng>;
 impl LightWallet {
     fn get_legacy_frontiers(
@@ -247,7 +252,7 @@ impl LightWallet {
         Option<incrementalmerkletree::frontier::NonEmptyFrontier<MerkleHashOrchard>>,
     ) {
         (
-            Self::get_legacy_frontier::<SaplingDomain<ChainType>>(&trees),
+            Self::get_legacy_frontier::<SaplingDomain>(&trees),
             Self::get_legacy_frontier::<OrchardDomain>(&trees),
         )
     }
@@ -481,7 +486,7 @@ impl LightWallet {
             MAX_SHARD_LEVEL,
         >,
     ) -> Result<Anchor, ShardTreeError<Infallible>> {
-        Ok(orchard::Anchor::from(tree.root_at_checkpoint(
+        Ok(orchard::Anchor::from(tree.root_at_checkpoint_depth(
             self.transaction_context.config.reorg_buffer_offset as usize,
         )?))
     }
@@ -561,8 +566,7 @@ impl LightWallet {
     }
 
     pub async fn maybe_verified_sapling_balance(&self, addr: Option<String>) -> Option<u64> {
-        self.shielded_balance::<SaplingDomain<zingoconfig::ChainType>>(addr, &[])
-            .await
+        self.shielded_balance::<SaplingDomain>(addr, &[]).await
     }
 
     pub fn memo_str(memo: Option<Memo>) -> Option<String> {
@@ -907,13 +911,13 @@ impl LightWallet {
                 }
                 Pool::Sapling => {
                     let sapling_candidates = self
-                        .get_all_domain_specific_notes::<SaplingDomain<zingoconfig::ChainType>>()
+                        .get_all_domain_specific_notes::<SaplingDomain>()
                         .await
                         .into_iter()
                         .filter(|note| note.spend_key().is_some())
                         .collect();
                     (sapling_notes, sapling_value_selected) = Self::add_notes_to_total::<
-                        SaplingDomain<zingoconfig::ChainType>,
+                        SaplingDomain,
                     >(
                         sapling_candidates,
                         (target_amount - orchard_value_selected - all_transparent_value_in_wallet)
@@ -964,9 +968,9 @@ impl LightWallet {
         .expect("u64 representable"))
     }
 
-    pub async fn send_to_addresses<F, Fut, P: TxProver>(
+    pub async fn send_to_addresses<F, Fut, SP: SpendProver, OP: OutputProver>(
         &self,
-        sapling_prover: P,
+        sapling_provers: (&SP, &OP),
         policy: NoteSelectionPolicy,
         receivers: Receivers,
         submission_height: BlockHeight,
@@ -996,7 +1000,7 @@ impl LightWallet {
                 start_time,
                 receivers,
                 policy,
-                sapling_prover,
+                sapling_provers,
             )
             .await?;
 
@@ -1055,7 +1059,7 @@ impl LightWallet {
                 let outpoint: OutPoint = utxo.to_outpoint();
 
                 let coin = TxOut {
-                    value: Amount::from_u64(utxo.value).unwrap(),
+                    value: NonNegativeAmount::from_u64(utxo.value).unwrap(),
                     script_pubkey: Script(utxo.script.clone()),
                 };
 
@@ -1083,11 +1087,10 @@ impl LightWallet {
             info!("Adding sapling spend");
             if let Err(e) = tx_builder.add_sapling_spend(
                 selected.extsk.clone().unwrap(),
-                selected.diversifier,
                 selected.note.clone(),
                 witness_trees
                     .witness_tree_sapling
-                    .witness(
+                    .witness_at_checkpoint_depth(
                         selected.witnessed_position,
                         self.transaction_context.config.reorg_buffer_offset as usize,
                     )
@@ -1107,7 +1110,7 @@ impl LightWallet {
                 orchard::tree::MerklePath::from(
                     witness_trees
                         .witness_tree_orchard
-                        .witness(
+                        .witness_at_checkpoint_depth(
                             selected.witnessed_position,
                             self.transaction_context.config.reorg_buffer_offset as usize,
                         )
@@ -1370,13 +1373,13 @@ impl LightWallet {
         Ok((tx_builder, total_shielded_receivers))
     }
 
-    async fn create_publication_ready_transaction<P: TxProver>(
+    async fn create_publication_ready_transaction<SP: SpendProver, OP: OutputProver>(
         &self,
         submission_height: BlockHeight,
         start_time: u64,
         receivers: Receivers,
         policy: NoteSelectionPolicy,
-        sapling_prover: P,
+        sapling_provers: (&SP, &OP),
     ) -> Result<Transaction, String> {
         // Start building transaction with spends and outputs set by:
         //  * target amount
@@ -1444,7 +1447,8 @@ impl LightWallet {
 
         tx_builder.with_progress_notifier(transmitter);
         let (transaction, _) = match tx_builder.build(
-            &sapling_prover,
+            sapling_provers.0,
+            sapling_provers.1,
             &transaction::fees::fixed::FeeRule::non_standard(MINIMUM_FEE),
         ) {
             Ok(res) => res,
@@ -1612,8 +1616,7 @@ impl LightWallet {
 
     pub async fn spendable_sapling_balance(&self, target_addr: Option<String>) -> Option<u64> {
         if let Capability::Spend(_) = self.wallet_capability().sapling {
-            self.verified_balance::<SaplingDomain<zingoconfig::ChainType>>(target_addr)
-                .await
+            self.verified_balance::<SaplingDomain>(target_addr).await
         } else {
             None
         }
@@ -1666,8 +1669,7 @@ impl LightWallet {
     /// The following functions use a filter/map functional approach to
     /// expressively unpack different kinds of transaction data.
     pub async fn unverified_sapling_balance(&self, target_addr: Option<String>) -> Option<u64> {
-        self.unverified_balance::<SaplingDomain<zingoconfig::ChainType>>(target_addr)
-            .await
+        self.unverified_balance::<SaplingDomain>(target_addr).await
     }
 
     async fn verified_balance<D: DomainWalletExt>(&self, target_addr: Option<String>) -> Option<u64>
@@ -1691,8 +1693,7 @@ impl LightWallet {
     }
 
     pub async fn verified_sapling_balance(&self, target_addr: Option<String>) -> Option<u64> {
-        self.verified_balance::<SaplingDomain<zingoconfig::ChainType>>(target_addr)
-            .await
+        self.verified_balance::<SaplingDomain>(target_addr).await
     }
 
     pub fn wallet_capability(&self) -> Arc<WalletCapability> {

@@ -27,7 +27,7 @@ pub fn build_fvks_from_wallet_capability(wallet_capability: &WalletCapability) -
             .to_bytes(),
     );
     let s_fvk = Fvk::Sapling(
-        zcash_primitives::zip32::sapling::DiversifiableFullViewingKey::try_from(wallet_capability)
+        zcash_primitives::zip32::DiversifiableFullViewingKey::try_from(wallet_capability)
             .unwrap()
             .to_bytes(),
     );

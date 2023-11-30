@@ -65,8 +65,8 @@ pub struct WalletCapability {
         super::extended_transparent::ExtendedPrivKey,
     >,
     pub sapling: Capability<
-        zcash_primitives::zip32::sapling::DiversifiableFullViewingKey,
-        zcash_primitives::zip32::sapling::ExtendedSpendingKey,
+        zcash_primitives::zip32::DiversifiableFullViewingKey,
+        zcash_primitives::zip32::ExtendedSpendingKey,
     >,
     pub orchard: Capability<orchard::keys::FullViewingKey, orchard::keys::SpendingKey>,
 
@@ -171,7 +171,7 @@ impl WalletCapability {
                 .to_bytes(),
         );
         let s_fvk = Fvk::Sapling(
-            zcash_primitives::zip32::sapling::DiversifiableFullViewingKey::try_from(self)
+            zcash_primitives::zip32::DiversifiableFullViewingKey::try_from(self)
                 .unwrap()
                 .to_bytes(),
         );
@@ -220,7 +220,7 @@ impl WalletCapability {
             let mut sapling_diversifier_index = DiversifierIndex::new();
             let mut address;
             let mut count = 0;
-            let fvk: zcash_primitives::zip32::sapling::DiversifiableFullViewingKey =
+            let fvk: zcash_primitives::zip32::DiversifiableFullViewingKey =
                 self.try_into().expect("to create an fvk");
             loop {
                 (sapling_diversifier_index, address) = fvk
@@ -405,7 +405,7 @@ impl WalletCapability {
                 }
                 Fvk::Sapling(key_bytes) => {
                     wc.sapling = Capability::View(
-                        zcash_primitives::zip32::sapling::DiversifiableFullViewingKey::read(
+                        zcash_primitives::zip32::DiversifiableFullViewingKey::read(
                             &key_bytes[..],
                             (),
                         )
@@ -648,7 +648,7 @@ impl TryFrom<&WalletCapability> for orchard::keys::FullViewingKey {
     }
 }
 
-impl TryFrom<&WalletCapability> for zcash_primitives::zip32::sapling::DiversifiableFullViewingKey {
+impl TryFrom<&WalletCapability> for zcash_primitives::zip32::DiversifiableFullViewingKey {
     type Error = String;
     fn try_from(wc: &WalletCapability) -> Result<Self, String> {
         match &wc.sapling {
@@ -692,7 +692,7 @@ impl TryFrom<&WalletCapability> for orchard::keys::PreparedIncomingViewingKey {
 impl TryFrom<&WalletCapability> for zcash_primitives::sapling::SaplingIvk {
     type Error = String;
     fn try_from(wc: &WalletCapability) -> Result<Self, String> {
-        let fvk: zcash_primitives::zip32::sapling::DiversifiableFullViewingKey = wc.try_into()?;
+        let fvk: zcash_primitives::zip32::DiversifiableFullViewingKey = wc.try_into()?;
         Ok(fvk.fvk().vk.ivk())
     }
 }
@@ -708,7 +708,7 @@ impl TryFrom<&WalletCapability> for orchard::keys::OutgoingViewingKey {
 impl TryFrom<&WalletCapability> for zcash_primitives::keys::OutgoingViewingKey {
     type Error = String;
     fn try_from(wc: &WalletCapability) -> Result<Self, String> {
-        let fvk: zcash_primitives::zip32::sapling::DiversifiableFullViewingKey = wc.try_into()?;
+        let fvk: zcash_primitives::zip32::DiversifiableFullViewingKey = wc.try_into()?;
         Ok(fvk.fvk().ovk)
     }
 }

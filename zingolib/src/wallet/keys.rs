@@ -57,9 +57,9 @@ pub fn get_zaddr_from_bip39seed(
     let extsk: ExtendedSpendingKey = ExtendedSpendingKey::from_path(
         &ExtendedSpendingKey::master(bip39_seed),
         &[
-            ChildIndex::Hardened(32),
-            ChildIndex::Hardened(config.get_coin_type()),
-            ChildIndex::Hardened(pos),
+            ChildIndex::hardened(32),
+            ChildIndex::hardened(config.get_coin_type()),
+            ChildIndex::hardened(pos),
         ],
     );
     let fvk = extsk.to_diversifiable_full_viewing_key();

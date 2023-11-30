@@ -12,7 +12,6 @@ use incrementalmerkletree::{
 };
 use orchard::{note_encryption::OrchardDomain, tree::MerkleHashOrchard};
 use zcash_note_encryption::Domain;
-use zingoconfig::ChainType;
 
 use futures::future::join_all;
 use http::Uri;
@@ -721,10 +720,7 @@ pub fn update_trees_with_compact_transaction(
     orchard_tree: &mut CommitmentTree<MerkleHashOrchard, 32>,
     compact_transaction: &CompactTx,
 ) {
-    update_tree_with_compact_transaction::<SaplingDomain<ChainType>>(
-        sapling_tree,
-        compact_transaction,
-    );
+    update_tree_with_compact_transaction::<SaplingDomain>(sapling_tree, compact_transaction);
     update_tree_with_compact_transaction::<OrchardDomain>(orchard_tree, compact_transaction);
 }
 
@@ -744,13 +740,11 @@ pub fn update_tree_with_compact_transaction<D: DomainWalletExt>(
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::compact_formats::CompactBlock;
     use crate::{blaze::test_utils::FakeCompactBlock, wallet::data::BlockData};
     use orchard::tree::MerkleHashOrchard;
     use zcash_primitives::block::BlockHash;
-    use zingoconfig::ChainType;
-
-    use super::*;
 
     fn make_fake_block_list(numblocks: u64) -> Vec<BlockData> {
         if numblocks == 0 {
@@ -1083,7 +1077,7 @@ mod test {
         let cb = decode_block();
 
         for compact_transaction in &cb.vtx {
-            super::update_tree_with_compact_transaction::<SaplingDomain<ChainType>>(
+            super::update_tree_with_compact_transaction::<SaplingDomain>(
                 &mut start_tree,
                 compact_transaction,
             )

@@ -23,11 +23,12 @@ use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::merkle_tree::{read_commitment_tree, write_commitment_tree, HashSer};
 use zcash_primitives::sapling::note_encryption::SaplingDomain;
 use zcash_primitives::sapling::{self, Node};
+use zcash_primitives::zip32::ExtendedSpendingKey;
 use zcash_primitives::{
     memo::Memo,
     transaction::{components::OutPoint, TxId},
 };
-use zingoconfig::{ChainType, MAX_REORG};
+use zingoconfig::MAX_REORG;
 
 use super::keys::unified::WalletCapability;
 use super::traits::{self, DomainWalletExt, ReadableWriteable, ToBytes};
@@ -178,7 +179,7 @@ impl WitnessTrees {
         non_empty_sapling_frontier: Option<NonEmptyFrontier<sapling::Node>>,
         non_empty_orchard_frontier: Option<NonEmptyFrontier<MerkleHashOrchard>>,
     ) {
-        self.insert_domain_frontier_notes::<SaplingDomain<ChainType>>(non_empty_sapling_frontier);
+        self.insert_domain_frontier_notes::<SaplingDomain>(non_empty_sapling_frontier);
         self.insert_domain_frontier_notes::<OrchardDomain>(non_empty_orchard_frontier);
     }
     fn insert_domain_frontier_notes<D: DomainWalletExt>(
@@ -1156,12 +1157,11 @@ impl TransactionMetadata {
     }
 
     pub fn total_change_returned(&self) -> u64 {
-        self.pool_change_returned::<SaplingDomain<ChainType>>()
-            + self.pool_change_returned::<OrchardDomain>()
+        self.pool_change_returned::<SaplingDomain>() + self.pool_change_returned::<OrchardDomain>()
     }
     pub fn total_value_received(&self) -> u64 {
         self.pool_value_received::<OrchardDomain>()
-            + self.pool_value_received::<SaplingDomain<ChainType>>()
+            + self.pool_value_received::<SaplingDomain>()
             + self
                 .transparent_notes
                 .iter()
@@ -1232,7 +1232,7 @@ pub struct SpendableSaplingNote {
     pub diversifier: zcash_primitives::sapling::Diversifier,
     pub note: zcash_primitives::sapling::Note,
     pub witnessed_position: Position,
-    pub extsk: Option<zcash_primitives::zip32::sapling::ExtendedSpendingKey>,
+    pub extsk: Option<ExtendedSpendingKey>,
 }
 
 #[derive(Debug)]

@@ -35,9 +35,9 @@ use zcash_primitives::{
     consensus::{BlockHeight, NetworkUpgrade, Parameters},
     memo::{Memo, MemoBytes},
     merkle_tree::{read_incremental_witness, HashSer},
-    sapling::note_encryption::SaplingDomain,
+    sapling::{self, bundle::GrothProofBytes, note_encryption::SaplingDomain},
     transaction::{
-        components::{self, sapling::GrothProofBytes, Amount, OutputDescription, SpendDescription},
+        components::{Amount, OutputDescription, SpendDescription},
         Transaction, TxId,
     },
     zip32,
@@ -115,16 +115,19 @@ impl<A> ShieldedOutputExt<OrchardDomain> for Action<A> {
     }
 }
 
-impl ShieldedOutputExt<SaplingDomain<ChainType>> for OutputDescription<GrothProofBytes> {
-    fn domain(&self, height: BlockHeight, parameters: ChainType) -> SaplingDomain<ChainType> {
-        SaplingDomain::for_height(parameters, height)
+impl ShieldedOutputExt<SaplingDomain> for OutputDescription<GrothProofBytes> {
+    fn domain(&self, height: BlockHeight, parameters: ChainType) -> SaplingDomain {
+        SaplingDomain::new(zcash_primitives::consensus::sapling_zip212_enforcement(
+            &parameters,
+            height,
+        ))
     }
 
     fn out_ciphertext(&self) -> [u8; 80] {
         *self.out_ciphertext()
     }
 
-    fn value_commitment(&self) -> <SaplingDomain<ChainType> as Domain>::ValueCommitment {
+    fn value_commitment(&self) -> <SaplingDomain as Domain>::ValueCommitment {
         self.cv().clone()
     }
 }
@@ -190,9 +193,7 @@ pub trait Spend {
     fn nullifier(&self) -> &Self::Nullifier;
 }
 
-impl<Auth: zcash_primitives::transaction::components::sapling::Authorization> Spend
-    for SpendDescription<Auth>
-{
+impl<Auth: zcash_primitives::sapling::bundle::Authorization> Spend for SpendDescription<Auth> {
     type Nullifier = zcash_primitives::sapling::Nullifier;
     fn nullifier(&self) -> &Self::Nullifier {
         self.nullifier()
@@ -268,7 +269,7 @@ where
     fn domain(&self, parameters: ChainType, height: BlockHeight) -> D;
 }
 
-impl CompactOutput<SaplingDomain<ChainType>> for CompactSaplingOutput {
+impl CompactOutput<SaplingDomain> for CompactSaplingOutput {
     fn from_compact_transaction(compact_transaction: &CompactTx) -> &Vec<CompactSaplingOutput> {
         &compact_transaction.outputs
     }
@@ -277,8 +278,11 @@ impl CompactOutput<SaplingDomain<ChainType>> for CompactSaplingOutput {
         slice_to_array(&self.cmu)
     }
 
-    fn domain(&self, parameters: ChainType, height: BlockHeight) -> SaplingDomain<ChainType> {
-        SaplingDomain::for_height(parameters, height)
+    fn domain(&self, parameters: ChainType, height: BlockHeight) -> SaplingDomain {
+        SaplingDomain::new(zcash_primitives::consensus::sapling_zip212_enforcement(
+            &parameters,
+            height,
+        ))
     }
 }
 
@@ -326,10 +330,10 @@ where
     fn spend_elements(&self) -> Self::Spends<'_>;
 }
 
-impl Bundle<SaplingDomain<ChainType>>
-    for components::sapling::Bundle<components::sapling::Authorized>
+impl Bundle<SaplingDomain>
+    for zcash_primitives::sapling::Bundle<zcash_primitives::sapling::bundle::Authorized, Amount>
 {
-    type Spend = SpendDescription<components::sapling::Authorized>;
+    type Spend = SpendDescription<zcash_primitives::sapling::bundle::Authorized>;
     type Output = OutputDescription<GrothProofBytes>;
     type Spends<'a> = &'a [Self::Spend];
     type Outputs<'a> = &'a [Self::Output];
@@ -761,12 +765,12 @@ where
     fn wc_to_sk(wc: &WalletCapability) -> Result<Self::SpendingKey, String>;
 }
 
-impl DomainWalletExt for SaplingDomain<ChainType> {
+impl DomainWalletExt for SaplingDomain {
     const NU: NetworkUpgrade = NetworkUpgrade::Sapling;
 
-    type Fvk = zip32::sapling::DiversifiableFullViewingKey;
+    type Fvk = zip32::DiversifiableFullViewingKey;
 
-    type SpendingKey = zip32::sapling::ExtendedSpendingKey;
+    type SpendingKey = zip32::ExtendedSpendingKey;
 
     type CompactOutput = CompactSaplingOutput;
 
@@ -774,7 +778,7 @@ impl DomainWalletExt for SaplingDomain<ChainType> {
 
     type SpendableNoteAT = SpendableSaplingNote;
 
-    type Bundle = components::sapling::Bundle<components::sapling::Authorized>;
+    type Bundle = sapling::Bundle<sapling::bundle::Authorized, Amount>;
 
     fn get_shardtree(
         trees: &WitnessTrees,
@@ -922,14 +926,14 @@ pub trait Diversifiable {
     ) -> Option<Self::Address>;
 }
 
-impl Diversifiable for zip32::sapling::DiversifiableFullViewingKey {
+impl Diversifiable for zip32::DiversifiableFullViewingKey {
     type Note = SaplingNote;
 
     type Address = zcash_primitives::sapling::PaymentAddress;
 
     fn diversified_address(
         &self,
-        div: <<zip32::sapling::DiversifiableFullViewingKey as Diversifiable>::Note as ShieldedNoteInterface>::Diversifier,
+        div: <<zip32::DiversifiableFullViewingKey as Diversifiable>::Note as ShieldedNoteInterface>::Diversifier,
     ) -> Option<Self::Address> {
         self.fvk().vk.to_payment_address(div)
     }
@@ -1010,14 +1014,14 @@ where
     fn spend_key(&self) -> Option<&D::SpendingKey>;
 }
 
-impl SpendableNote<SaplingDomain<ChainType>> for SpendableSaplingNote {
+impl SpendableNote<SaplingDomain> for SpendableSaplingNote {
     fn from_parts_unchecked(
         transaction_id: TxId,
         nullifier: zcash_primitives::sapling::Nullifier,
         diversifier: zcash_primitives::sapling::Diversifier,
         note: zcash_primitives::sapling::Note,
         witnessed_position: Position,
-        extsk: Option<&zip32::sapling::ExtendedSpendingKey>,
+        extsk: Option<&zip32::ExtendedSpendingKey>,
     ) -> Self {
         SpendableSaplingNote {
             transaction_id,
@@ -1049,7 +1053,7 @@ impl SpendableNote<SaplingDomain<ChainType>> for SpendableSaplingNote {
         &self.witnessed_position
     }
 
-    fn spend_key(&self) -> Option<&zip32::sapling::ExtendedSpendingKey> {
+    fn spend_key(&self) -> Option<&zip32::ExtendedSpendingKey> {
         self.extsk.as_ref()
     }
 }
@@ -1138,7 +1142,7 @@ impl ReadableWriteable<()> for orchard::keys::SpendingKey {
     }
 }
 
-impl ReadableWriteable<()> for zip32::sapling::ExtendedSpendingKey {
+impl ReadableWriteable<()> for zip32::ExtendedSpendingKey {
     const VERSION: u8 = 0; //Not applicable
 
     fn read<R: Read>(reader: R, _: ()) -> io::Result<Self> {
@@ -1150,13 +1154,13 @@ impl ReadableWriteable<()> for zip32::sapling::ExtendedSpendingKey {
     }
 }
 
-impl ReadableWriteable<()> for zip32::sapling::DiversifiableFullViewingKey {
+impl ReadableWriteable<()> for zip32::DiversifiableFullViewingKey {
     const VERSION: u8 = 0; //Not applicable
 
     fn read<R: Read>(mut reader: R, _: ()) -> io::Result<Self> {
         let mut fvk_bytes = [0u8; 128];
         reader.read_exact(&mut fvk_bytes)?;
-        zip32::sapling::DiversifiableFullViewingKey::from_bytes(&fvk_bytes).ok_or(io::Error::new(
+        zip32::DiversifiableFullViewingKey::from_bytes(&fvk_bytes).ok_or(io::Error::new(
             io::ErrorKind::InvalidInput,
             "Couldn't read a Sapling Diversifiable Full Viewing Key",
         ))
@@ -1196,15 +1200,13 @@ impl ReadableWriteable<(zcash_primitives::sapling::Diversifier, &WalletCapabilit
         let rseed = super::data::read_sapling_rseed(&mut reader)?;
 
         Ok(
-            <SaplingDomain<zingoconfig::ChainType> as DomainWalletExt>::wc_to_fvk(
-                wallet_capability,
-            )
-            .expect("to get an fvk from a wc")
-            .fvk()
-            .vk
-            .to_payment_address(diversifier)
-            .unwrap()
-            .create_note(value, rseed),
+            <SaplingDomain as DomainWalletExt>::wc_to_fvk(wallet_capability)
+                .expect("to get an fvk from a wc")
+                .fvk()
+                .vk
+                .to_payment_address(diversifier)
+                .unwrap()
+                .create_note(sapling::value::NoteValue::from_raw(value), rseed),
         )
     }
 

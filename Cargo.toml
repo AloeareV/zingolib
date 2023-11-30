@@ -11,18 +11,18 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-zcash_address = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zingo_rc.2" }
-zcash_client_backend = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zingo_rc.2" }
-zcash_encoding = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zingo_rc.2" }
+zcash_address = { git = "https://github.com/zcash/librustzcash.git", rev = "764127f9526da9a4c15aac267951cd1a1328f30a" }
+zcash_client_backend = { git = "https://github.com/zcash/librustzcash.git", rev = "764127f9526da9a4c15aac267951cd1a1328f30a" }
+zcash_encoding = { git = "https://github.com/zcash/librustzcash.git", rev = "764127f9526da9a4c15aac267951cd1a1328f30a" }
 zcash_note_encryption = "0.4"
-zcash_primitives = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zingo_rc.2" }
-zcash_proofs = { git = "https://github.com/zingolabs/librustzcash.git", tag = "zingo_rc.2" }
+zcash_primitives = { git = "https://github.com/zcash/librustzcash.git", rev = "764127f9526da9a4c15aac267951cd1a1328f30a" }
+zcash_proofs = { git = "https://github.com/zcash/librustzcash.git", rev = "764127f9526da9a4c15aac267951cd1a1328f30a" }
 orchard = "0.6"
 tonic-build = "0.7"
 tempdir = "0.3"
 portpicker = "0.1"
 incrementalmerkletree = { version = "0.5" }
-shardtree = "0.1"
+shardtree = "0.2"
 build_utils = { path = "./build_utils" }
 http = "0.2.4"
 hyper = { version = "0.14", features = ["full"] }

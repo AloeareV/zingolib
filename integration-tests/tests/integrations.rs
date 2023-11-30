@@ -2603,10 +2603,10 @@ mod slow {
         assert_eq!(
             wallet_trees
                 .witness_tree_orchard
-                .witness(last_leaf.unwrap(), 0)
+                .witness_at_checkpoint_depth(last_leaf.unwrap(), 0)
                 .unwrap_or_else(|_| panic!("{:#?}", wallet_trees.witness_tree_orchard)),
             server_orchard_shardtree
-                .witness(last_leaf.unwrap(), 0)
+                .witness_at_checkpoint_depth(last_leaf.unwrap(), 0)
                 .unwrap()
         )
     }
@@ -3276,7 +3276,7 @@ mod slow {
             .as_ref()
             .unwrap()
             .witness_tree_orchard
-            .witness(
+            .witness_at_checkpoint_depth(
                 recipient
                     .wallet
                     .transaction_context
@@ -3316,7 +3316,7 @@ mod slow {
             .as_ref()
             .unwrap()
             .witness_tree_orchard
-            .witness(
+            .witness_at_checkpoint_depth(
                 recipient
                     .wallet
                     .transaction_context
