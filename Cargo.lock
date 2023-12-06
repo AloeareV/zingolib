@@ -241,12 +241,12 @@ dependencies = [
  "blake2s_simd",
  "byteorder",
  "crossbeam-channel",
- "ff 0.13.0",
- "group 0.13.0",
+ "ff",
+ "group",
  "lazy_static",
  "log",
  "num_cpus",
- "pairing 0.23.0",
+ "pairing",
  "rand_core 0.6.4",
  "rayon",
  "subtle",
@@ -351,9 +351,9 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7bc6d6292be3a19e6379786dac800f551e5865a5bb51ebbe3064ab80433f403"
 dependencies = [
- "ff 0.13.0",
- "group 0.13.0",
- "pairing 0.23.0",
+ "ff",
+ "group",
+ "pairing",
  "rand_core 0.6.4",
  "subtle",
 ]
@@ -654,9 +654,9 @@ dependencies = [
 
 [[package]]
 name = "deranged"
-version = "0.3.9"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f32d04922c60427da6f9fef14d042d9edddef64cb9d4ce0d64d0685fbeb1fd3"
+checksum = "8eb30d70a07a3b04884d2677f06bec33509dc67ca60d92949e5535352d3191dc"
 dependencies = [
  "powerfmt",
 ]
@@ -857,16 +857,6 @@ dependencies = [
 
 [[package]]
 name = "ff"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d013fc25338cc558c5c2cfbad646908fb23591e2404481826742b651c9af7160"
-dependencies = [
- "rand_core 0.6.4",
- "subtle",
-]
-
-[[package]]
-name = "ff"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ded41244b729663b1e574f1b4fb731469f69f79c17667b5d776b16cda0479449"
@@ -1056,22 +1046,11 @@ checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 
 [[package]]
 name = "group"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dfbfb3a6cfbd390d5c9564ab283a0349b9b9fcd46a706c1eb10e0db70bfbac7"
-dependencies = [
- "ff 0.12.1",
- "rand_core 0.6.4",
- "subtle",
-]
-
-[[package]]
-name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0f9ef7462f7c099f518d754361858f86d8a07af53ba9af0fe635bbccb151a63"
 dependencies = [
- "ff 0.13.0",
+ "ff",
  "memuse",
  "rand_core 0.6.4",
  "subtle",
@@ -1104,8 +1083,8 @@ checksum = "126a150072b0c38c7b573fe3eaf0af944a7fed09e154071bf2436d3f016f7230"
 dependencies = [
  "arrayvec",
  "bitvec",
- "ff 0.13.0",
- "group 0.13.0",
+ "ff",
+ "group",
  "halo2_proofs",
  "lazy_static",
  "pasta_curves",
@@ -1127,8 +1106,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b867a8d9bbb85fca76fff60652b5cd19b853a1c4d0665cb89bee68b18d2caf0"
 dependencies = [
  "blake2b_simd",
- "ff 0.13.0",
- "group 0.13.0",
+ "ff",
+ "group",
  "halo2_legacy_pdqsort",
  "maybe-rayon",
  "pasta_curves",
@@ -1494,19 +1473,19 @@ checksum = "8499f7a74008aafbecb2a2e608a3e13e4dd3e84df198b604451efe93f2de6e61"
 dependencies = [
  "bitvec",
  "bls12_381",
- "ff 0.13.0",
- "group 0.13.0",
+ "ff",
+ "group",
  "rand_core 0.6.4",
  "subtle",
 ]
 
 [[package]]
 name = "known-folders"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b6f1427d9c43b1cce87434c4d9eca33f43bdbb6246a762aa823a582f74c1684"
+checksum = "4397c789f2709d23cfcb703b316e0766a8d4b17db2d47b0ab096ef6047cae1d8"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1688,9 +1667,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.9"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dce281c5e46beae905d4de1870d8b1509a9142b62eedf18b443b011ca8343d0"
+checksum = "8f3d0b296e374a4e6f3c7b0a1f5a51d748a0d34c85e7dc48fc3fa9a87657fe09"
 dependencies = [
  "libc",
  "wasi",
@@ -1831,9 +1810,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.60"
+version = "0.10.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79a4c6c3a2b158f7f8f2a2fc5a969fa3a068df6fc9dbb4a43845436e3af7c800"
+checksum = "6b8419dc8cc6d866deb801274bba2e6f8f6108c1bb7fcc10ee5ab864931dbb45"
 dependencies = [
  "bitflags 2.4.1",
  "cfg-if",
@@ -1863,9 +1842,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.96"
+version = "0.9.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3812c071ba60da8b5677cc12bcb1d42989a65553772897a7e0355545a819838f"
+checksum = "c3eaad34cdd97d81de97964fc7f29e2d104f483840d906ef56daa1912338460b"
 dependencies = [
  "cc",
  "libc",
@@ -1882,9 +1861,9 @@ dependencies = [
  "aes",
  "bitvec",
  "blake2b_simd",
- "ff 0.13.0",
+ "ff",
  "fpe",
- "group 0.13.0",
+ "group",
  "halo2_gadgets",
  "halo2_proofs",
  "hex 0.4.3",
@@ -1924,20 +1903,11 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "pairing"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135590d8bdba2b31346f9cd1fb2a912329f5135e832a4f422942eb6ead8b6b3b"
-dependencies = [
- "group 0.12.1",
-]
-
-[[package]]
-name = "pairing"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
 dependencies = [
- "group 0.13.0",
+ "group",
 ]
 
 [[package]]
@@ -1981,8 +1951,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3e57598f73cc7e1b2ac63c79c517b31a0877cd7c402cdcaa311b5208de7a095"
 dependencies = [
  "blake2b_simd",
- "ff 0.13.0",
- "group 0.13.0",
+ "ff",
+ "group",
  "lazy_static",
  "rand 0.8.5",
  "static_assertions",
@@ -2313,7 +2283,7 @@ checksum = "78a5191930e84973293aa5f532b513404460cd2216c1cfb76d08748c15b40b02"
 dependencies = [
  "blake2b_simd",
  "byteorder",
- "group 0.13.0",
+ "group",
  "hex 0.4.3",
  "jubjub",
  "pasta_curves",
@@ -2464,9 +2434,9 @@ dependencies = [
 
 [[package]]
 name = "ring"
-version = "0.17.6"
+version = "0.17.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "684d5e6e18f669ccebf64a92236bb7db9a34f07be010e3627368182027180866"
+checksum = "688c63d65483050968b2a8937f7995f443e27041a0f7700aa59b0822aedebb74"
 dependencies = [
  "cc",
  "getrandom",
@@ -2577,7 +2547,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "629648aced5775d558af50b2b4c7b02983a04b312126d45eeead26e7caa498b9"
 dependencies = [
  "log",
- "ring 0.17.6",
+ "ring 0.17.7",
  "rustls-webpki",
  "sct",
 ]
@@ -2609,7 +2579,7 @@ version = "0.101.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
- "ring 0.17.6",
+ "ring 0.17.7",
  "untrusted 0.9.0",
 ]
 
@@ -2690,7 +2660,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414"
 dependencies = [
- "ring 0.17.6",
+ "ring 0.17.7",
  "untrusted 0.9.0",
 ]
 
@@ -3685,7 +3655,7 @@ version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed63aea5ce73d0ff405984102c42de94fc55a6b75765d621c65262469b3c9b53"
 dependencies = [
- "ring 0.17.6",
+ "ring 0.17.7",
  "untrusted 0.9.0",
 ]
 
@@ -3944,7 +3914,7 @@ dependencies = [
  "bs58",
  "byteorder",
  "crossbeam-channel",
- "group 0.13.0",
+ "group",
  "hdwallet",
  "hex 0.4.3",
  "incrementalmerkletree",
@@ -4004,9 +3974,9 @@ dependencies = [
  "bls12_381",
  "byteorder",
  "equihash",
- "ff 0.13.0",
+ "ff",
  "fpe",
- "group 0.13.0",
+ "group",
  "hdwallet",
  "hex 0.4.3",
  "incrementalmerkletree",
@@ -4034,7 +4004,7 @@ dependencies = [
  "bellman",
  "blake2b_simd",
  "bls12_381",
- "group 0.13.0",
+ "group",
  "home",
  "jubjub",
  "known-folders",
@@ -4148,9 +4118,9 @@ dependencies = [
  "concat-idents",
  "derive_more",
  "either",
- "ff 0.13.0",
+ "ff",
  "futures",
- "group 0.13.0",
+ "group",
  "hex 0.3.2",
  "http",
  "http-body",
@@ -4165,12 +4135,12 @@ dependencies = [
  "log4rs",
  "nonempty",
  "orchard",
- "pairing 0.22.0",
+ "pairing",
  "portpicker",
  "prost",
  "rand 0.8.5",
  "reqwest",
- "ring 0.17.6",
+ "ring 0.17.7",
  "ripemd160",
  "rust-embed",
  "rustls-pemfile",
