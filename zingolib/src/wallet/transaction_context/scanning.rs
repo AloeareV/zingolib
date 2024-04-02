@@ -18,6 +18,7 @@ use tokio::sync::RwLock;
 use zcash_client_backend::address::{Address, UnifiedAddress};
 use zcash_note_encryption::{try_output_recovery_with_ovk, Domain};
 use zcash_primitives::{
+    consensus::BlockHeight,
     memo::{Memo, MemoBytes},
     transaction::{Transaction, TxId},
 };
@@ -28,6 +29,7 @@ use zip32::Scope::Internal;
 
 use super::TransactionContext;
 
+type FnGenBundle<I> = <I as DomainWalletExt>::Bundle;
 impl TransactionContext {
     #[allow(clippy::too_many_arguments)]
     async fn execute_bundlescans_internal(
@@ -359,37 +361,13 @@ impl TransactionContext {
         D::Recipient: zingo_traits::Recipient,
         D::Memo: zingo_traits::ToBytes<512>,
     {
-        type FnGenBundle<I> = <I as DomainWalletExt>::Bundle;
-        // Check if any of the nullifiers generated in this transaction are ours. We only need this for unconfirmed transactions,
-        // because for transactions in the block, we will check the nullifiers from the blockdata
-        if status.is_broadcast() {
-            let unspent_nullifiers = self
-                .transaction_metadata_set
-                .read()
-                .await
-                .get_nullifier_value_txid_outputindex_of_unspent_notes::<D>();
-            for output in <FnGenBundle<D> as zingo_traits::Bundle<D>>::from_transaction(transaction)
-                .into_iter()
-                .flat_map(|bundle| bundle.spend_elements().into_iter())
-            {
-                if let Some((nf, _value, transaction_id, output_index)) = unspent_nullifiers
-                    .iter()
-                    .find(|(nf, _, _, _)| nf == output.nullifier())
-                {
-                    let _ = self
-                        .transaction_metadata_set
-                        .write()
-                        .await
-                        .found_spent_nullifier(
-                            transaction.txid(),
-                            status,
-                            block_time,
-                            (*nf).into(),
-                            *transaction_id,
-                            *output_index,
-                        );
-                }
-            }
+        if let ConfirmationStatus::Broadcast(broadcast_height) = status {
+            self.detect_nullifiers_of_unconfirmed_transaction::<D>(
+                transaction,
+                broadcast_height,
+                block_time,
+            )
+            .await
         }
         // The preceding updates the wallet_transactions with presumptive new "spent" nullifiers.  I continue to find the notion
         // of a "spent" nullifier to be problematic.
@@ -518,6 +496,45 @@ impl TransactionContext {
                 )
                 .await;
             };
+        }
+    }
+    pub async fn detect_nullifiers_of_unconfirmed_transaction<D: DomainWalletExt>(
+        &self,
+        transaction: &Transaction,
+        broadcast_height: BlockHeight,
+        broadcast_timestamp: u32,
+    ) where
+        <D as zcash_note_encryption::Domain>::Note: PartialEq + Clone,
+        <D as zcash_note_encryption::Domain>::Recipient: zingo_traits::Recipient,
+    {
+        // Check if any of the nullifiers generated in this transaction are ours. We only need this for unconfirmed transactions,
+        // because for transactions in the block, we will check the nullifiers from the blockdata
+        let unspent_nullifiers = self
+            .transaction_metadata_set
+            .read()
+            .await
+            .get_nullifier_value_txid_outputindex_of_unspent_notes::<D>();
+        for output in <FnGenBundle<D> as zingo_traits::Bundle<D>>::from_transaction(transaction)
+            .into_iter()
+            .flat_map(|bundle| bundle.spend_elements().into_iter())
+        {
+            if let Some((nf, _value, transaction_id, output_index)) = unspent_nullifiers
+                .iter()
+                .find(|(nf, _, _, _)| nf == output.nullifier())
+            {
+                let _ = self
+                    .transaction_metadata_set
+                    .write()
+                    .await
+                    .found_spent_nullifier(
+                        transaction.txid(),
+                        ConfirmationStatus::Broadcast(broadcast_height),
+                        broadcast_timestamp,
+                        (*nf).into(),
+                        *transaction_id,
+                        *output_index,
+                    );
+            }
         }
     }
 }
