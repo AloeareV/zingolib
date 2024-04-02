@@ -18,7 +18,7 @@ use tokio::sync::RwLock;
 use zcash_client_backend::address::{Address, UnifiedAddress};
 use zcash_note_encryption::{try_output_recovery_with_ovk, Domain};
 use zcash_primitives::{
-    consensus::BlockHeight,
+    consensus::{BlockHeight, Parameters},
     memo::{Memo, MemoBytes},
     transaction::{Transaction, TxId},
 };
@@ -406,79 +406,7 @@ impl TransactionContext {
         )
         .await;
 
-        for (_domain, output) in domain_tagged_outputs.iter() {
-            outgoing_metadatas.extend(
-                match try_output_recovery_with_ovk::<
-                    D,
-                    <FnGenBundle<D> as zingo_traits::Bundle<D>>::Output,
-                >(
-                    &output.domain(status.get_height(), self.config.chain),
-                    &external_outgoing_viewing_key,
-                    &output,
-                    &output.value_commitment(),
-                    &output.out_ciphertext(),
-                ) {
-                    Some((note, payment_address, memo_bytes)) => {
-                        // Mark this transaction as an outgoing transaction, so we can grab all outgoing metadata
-                        *is_outgoing_transaction = true;
-                        let address = payment_address.b32encode_for_network(&self.config.chain);
-
-                        // Check if this is change, and if it also doesn't have a memo, don't add
-                        // to the outgoing metadata.
-                        // If this is change (i.e., funds sent to ourself) AND has a memo, then
-                        // presumably the user is writing a memo to themself, so we will add it to
-                        // the outgoing metadata, even though it might be confusing in the UI, but hopefully
-                        // the user can make sense of it.
-                        match Memo::from_bytes(&memo_bytes.to_bytes()) {
-                            Err(_) => None,
-                            Ok(memo) => {
-                                if self.key.addresses().iter().any(|unified_address| {
-                                    [
-                                        unified_address.transparent().cloned().map(Address::from),
-                                        unified_address.sapling().cloned().map(Address::from),
-                                        unified_address.orchard().cloned().map(
-                                            |orchard_receiver| {
-                                                Address::from(
-                                                    UnifiedAddress::from_receivers(
-                                                        Some(orchard_receiver),
-                                                        None,
-                                                        None,
-                                                    )
-                                                    .unwrap(),
-                                                )
-                                            },
-                                        ),
-                                    ]
-                                    .into_iter()
-                                    .flatten()
-                                    .map(|addr| addr.encode(&self.config.chain))
-                                    .any(|addr| addr == address)
-                                }) {
-                                    if let Memo::Text(_) = memo {
-                                        Some(OutgoingTxData {
-                                            to_address: address,
-                                            value: D::WalletNote::value_from_note(&note),
-                                            memo,
-                                            recipient_ua: None,
-                                        })
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    Some(OutgoingTxData {
-                                        to_address: address,
-                                        value: D::WalletNote::value_from_note(&note),
-                                        memo,
-                                        recipient_ua: None,
-                                    })
-                                }
-                            }
-                        }
-                    }
-                    None => None,
-                },
-            );
-        }
+    recover_and_record_domain_specific_outputs(&domain_tagged_outputs, outgoing_metadatas, &self.config.chain)
 
         // now we have decrypted everything about the transaction except anything to do with the internal incoming viewing key. in the intercompatibility case, we may want to check the internal incoming viewing key for sapling. in the present case, i am going to write fast code that doesnt involve rewriting this entire module. the goal is to get incoming change compatibility with zip317 -fv
         if scan_internal_scope_if_outgoing && *is_outgoing_transaction {
@@ -600,5 +528,86 @@ pub async fn decrypt_and_record_incoming_transactions<D>(
             .write()
             .await
             .add_memo_to_note_metadata::<D::WalletNote>(&transaction.txid(), note, memo);
+    }
+}
+
+async fn recover_and_record_domain_specific_outputs<D: DomainWalletExt, P: Parameters>(
+    domain_tagged_outputs: &Vec<(D, <<D as DomainWalletExt>::Bundle as Bundle<D>>::Output)>,
+    outgoing_metadatas: &mut Vec<OutgoingTxData>,
+    params: &P
+) where
+    <D as zcash_note_encryption::Domain>::Note: PartialEq + Clone,
+    <D as zcash_note_encryption::Domain>::Recipient: zingo_traits::Recipient,
+{
+    for (_domain, output) in domain_tagged_outputs.iter() {
+        outgoing_metadatas.extend(
+            match try_output_recovery_with_ovk::<
+                D,
+                <FnGenBundle<D> as zingo_traits::Bundle<D>>::Output,
+            >(
+                &output.domain(status.get_height(), params),
+                &external_outgoing_viewing_key,
+                &output,
+                &output.value_commitment(),
+                &output.out_ciphertext(),
+            ) {
+                Some((note, payment_address, memo_bytes)) => {
+                    // Mark this transaction as an outgoing transaction, so we can grab all outgoing metadata
+                    *is_outgoing_transaction = true;
+                    let address = payment_address.b32encode_for_network(&self.config.chain);
+
+                    // Check if this is change, and if it also doesn't have a memo, don't add
+                    // to the outgoing metadata.
+                    // If this is change (i.e., funds sent to ourself) AND has a memo, then
+                    // presumably the user is writing a memo to themself, so we will add it to
+                    // the outgoing metadata, even though it might be confusing in the UI, but hopefully
+                    // the user can make sense of it.
+                    match Memo::from_bytes(&memo_bytes.to_bytes()) {
+                        Err(_) => None,
+                        Ok(memo) => {
+                            if self.key.addresses().iter().any(|unified_address| {
+                                [
+                                    unified_address.transparent().cloned().map(Address::from),
+                                    unified_address.sapling().cloned().map(Address::from),
+                                    unified_address.orchard().cloned().map(|orchard_receiver| {
+                                        Address::from(
+                                            UnifiedAddress::from_receivers(
+                                                Some(orchard_receiver),
+                                                None,
+                                                None,
+                                            )
+                                            .unwrap(),
+                                        )
+                                    }),
+                                ]
+                                .into_iter()
+                                .flatten()
+                                .map(|addr| addr.encode(&self.config.chain))
+                                .any(|addr| addr == address)
+                            }) {
+                                if let Memo::Text(_) = memo {
+                                    Some(OutgoingTxData {
+                                        to_address: address,
+                                        value: D::WalletNote::value_from_note(&note),
+                                        memo,
+                                        recipient_ua: None,
+                                    })
+                                } else {
+                                    None
+                                }
+                            } else {
+                                Some(OutgoingTxData {
+                                    to_address: address,
+                                    value: D::WalletNote::value_from_note(&note),
+                                    memo,
+                                    recipient_ua: None,
+                                })
+                            }
+                        }
+                    }
+                }
+                None => None,
+            },
+        );
     }
 }
