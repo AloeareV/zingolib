@@ -9,7 +9,9 @@ use sapling_crypto::{
 use sha2::Sha256;
 use zcash_client_backend::address;
 use zcash_primitives::{
-    consensus::NetworkConstants, legacy::TransparentAddress, zip32::ChildIndex,
+    consensus::{NetworkConstants, Parameters},
+    legacy::TransparentAddress,
+    zip32::ChildIndex,
 };
 use zingoconfig::ZingoConfig;
 
@@ -89,13 +91,13 @@ pub fn is_shielded_address(addr: &str, config: &ZingoConfig) -> bool {
 }
 
 /// STATIC METHODS
-pub fn address_from_pubkeyhash(config: &ZingoConfig, taddr: TransparentAddress) -> String {
+pub fn address_from_pubkeyhash<P: Parameters>(params: &P, taddr: TransparentAddress) -> String {
     match taddr {
         TransparentAddress::PublicKeyHash(hash) => {
-            hash.to_base58check(&config.chain.b58_pubkey_address_prefix(), &[])
+            hash.to_base58check(&params.b58_pubkey_address_prefix(), &[])
         }
         TransparentAddress::ScriptHash(hash) => {
-            hash.to_base58check(&config.chain.b58_script_address_prefix(), &[])
+            hash.to_base58check(&params.b58_script_address_prefix(), &[])
         }
     }
 }

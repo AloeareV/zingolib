@@ -78,7 +78,11 @@ impl WalletRead for SpendKit<'_, '_> {
     fn chain_height(
         &self,
     ) -> Result<Option<zcash_primitives::consensus::BlockHeight>, Self::Error> {
-        unimplemented!()
+        self.trees
+            .witness_tree_orchard
+            .store()
+            .max_checkpoint_id()
+            .map_err(|infallible| /* -> ! */ match infallible {})
     }
 
     fn get_block_hash(

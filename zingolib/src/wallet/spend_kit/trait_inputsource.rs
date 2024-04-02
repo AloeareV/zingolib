@@ -1,11 +1,18 @@
+use std::iter::repeat;
 
+use zcash_client_backend::{data_api::InputSource, wallet::WalletTransparentOutput};
+use zcash_primitives::{
+    consensus::BlockHeight,
+    legacy::TransparentAddress,
+    transaction::components::{amount::NonNegativeAmount, OutPoint, TxOut},
+};
 
-
-
-use zcash_client_backend::{data_api::InputSource};
-
-
-use crate::{error::ZingoLibError, wallet::record_book::NoteRecordIdentifier};
+use crate::{
+    error::ZingoLibError,
+    wallet::{
+        keys::address_from_pubkeyhash, notes::NoteInterface, record_book::NoteRecordIdentifier,
+    },
+};
 
 use super::SpendKit;
 
@@ -54,5 +61,53 @@ impl InputSource for SpendKit<'_, '_> {
             anchor_height,
             exclude,
         )
+    }
+    fn get_unspent_transparent_outputs(
+        &self,
+        address: &TransparentAddress,
+        max_height: BlockHeight,
+        exclude: &[OutPoint],
+    ) -> Result<Vec<WalletTransparentOutput>, Self::Error> {
+        self.spend_cap
+            .get_all_taddrs(&self.params)
+            .iter()
+            .find_map(|wallet_addr| {
+                if &address_from_pubkeyhash(&self.params, *address) == wallet_addr {
+                    Some(
+                        self.record_book
+                            .get_remote_txid_hashmap()
+                            .values()
+                            .into_iter()
+                            .flat_map(|transaction| {
+                                transaction
+                                    .transparent_notes
+                                    .iter()
+                                    .filter(|utxo| {
+                                        !utxo.is_spent_or_pending_spent()
+                                            && !exclude.contains(&utxo.to_outpoint())
+                                    })
+                                    .zip(repeat(transaction.status.get_confirmed_height()))
+                            })
+                            .filter_map(|(utxo, height)| {
+                                height.map(|h| {
+                                    WalletTransparentOutput::from_parts(
+                                        utxo.to_outpoint(),
+                                        TxOut {
+                                            value: NonNegativeAmount::from_u64(utxo.value).unwrap(), //review!
+                                            script_pubkey: zcash_primitives::legacy::Script(
+                                                utxo.script.clone(),
+                                            ),
+                                        },
+                                        h,
+                                    )
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| ZingoLibError::Error("can't find taddr in wallet".to_string()))
     }
 }

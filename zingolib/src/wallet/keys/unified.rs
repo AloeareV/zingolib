@@ -471,7 +471,7 @@ impl WalletCapability {
         Ok(wc)
     }
 
-    pub(crate) fn get_all_taddrs(&self, config: &ZingoConfig) -> HashSet<String> {
+    pub(crate) fn get_all_taddrs<P: Parameters>(&self, params: &P) -> HashSet<String> {
         self.addresses
             .iter()
             .filter_map(|address| {
@@ -481,7 +481,7 @@ impl WalletCapability {
                     {
                         Some(super::ToBase58Check::to_base58check(
                             hash.as_slice(),
-                            &config.chain.b58_pubkey_address_prefix(),
+                            &params.b58_pubkey_address_prefix(),
                             &[],
                         ))
                     } else {

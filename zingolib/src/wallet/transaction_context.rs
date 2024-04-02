@@ -97,7 +97,7 @@ impl TransactionContext {
         // Remember if this is an outgoing Tx. Useful for when we want to grab the outgoing metadata.
         let mut is_outgoing_transaction = false;
         // Collect our t-addresses for easy checking
-        let taddrs_set = self.key.get_all_taddrs(&self.config);
+        let taddrs_set = self.key.get_all_taddrs(&self.config.chain);
         // Process t-address outputs
         // If this transaction in outgoing, i.e., we received sent some money in this transaction, then we need to grab all transparent outputs
         // that don't belong to us as the outgoing metadata
