@@ -3654,7 +3654,7 @@ mod slow {
 
 mod basic_transactions {
     use zcash_primitives::memo::MemoBytes;
-    use zingo_testutils::scenarios;
+    use zingo_testutils::{build_fvk_client, scenarios};
     use zingolib::{get_base_address, lightclient::LightClient};
 
     async fn standard_send(
@@ -3682,53 +3682,81 @@ mod basic_transactions {
             scenarios::faucet_recipient_default().await;
 
         let sapling_dust = 5;
-        println!(
-            "scenario initial
-            faucet: {}
-            recipient: {}",
-            serde_json::to_string_pretty(&faucet.do_balance().await).unwrap(),
-            serde_json::to_string_pretty(&recipient.do_balance().await).unwrap(),
-        );
-        let proposal = faucet
+        let mut proposal = faucet
             .do_propose(vec![(
                 &get_base_address!(recipient, "sapling"),
-                sapling_dust,
+                200000,
                 None,
             )])
             .await
             .unwrap();
-        let txids = faucet.do_send_proposal().await.unwrap();
+        let mut txids = faucet.do_send_proposal().await.unwrap();
 
-        faucet
+        zingo_testutils::increase_height_and_wait_for_client(&regtest_manager, &recipient, 1)
+            .await
+            .unwrap();
+
+        println!(
+            "synced recipient
+            faucet: {}
+            recipient: {}",
+            serde_json::to_string_pretty(&faucet.do_balance().await).unwrap(),
+            serde_json::to_string_pretty(&recipient.do_balance().await).unwrap(),
+        );
+
+        proposal = recipient
+            .do_propose(vec![(&get_base_address!(faucet, "sapling"), 1, None)])
+            .await
+            .unwrap();
+        txids = recipient.do_send_proposal().await.unwrap();
+
+        println!(
+            "sent recipient
+            faucet: {}
+            recipient: {}",
+            serde_json::to_string_pretty(&faucet.do_balance().await).unwrap(),
+            serde_json::to_string_pretty(&recipient.do_balance().await).unwrap(),
+        );
+
+        recipient
             .check_chain_matches_proposal(proposal.clone(), txids.clone(), false)
             .await;
-        // standard_send(&faucet, &recipient, sapling_dust, None).await;
-
-        println!(
-            "sent to recipient
-            faucet: {}
-            recipient: {}",
-            serde_json::to_string_pretty(&faucet.do_balance().await).unwrap(),
-            serde_json::to_string_pretty(&recipient.do_balance().await).unwrap(),
-        );
-        zingo_testutils::increase_height_and_wait_for_client(&regtest_manager, &faucet, 1)
+        zingo_testutils::increase_height_and_wait_for_client(&regtest_manager, &recipient, 1)
             .await
             .unwrap();
-        zingo_testutils::increase_height_and_wait_for_client(&regtest_manager, &recipient, 0)
-            .await
-            .unwrap();
-
-        faucet
+        recipient
             .check_chain_matches_proposal(proposal, txids, true)
             .await;
-
         println!(
-            "synced both
+            "synced recipient
             faucet: {}
             recipient: {}",
             serde_json::to_string_pretty(&faucet.do_balance().await).unwrap(),
             serde_json::to_string_pretty(&recipient.do_balance().await).unwrap(),
         );
+
+        // faucet
+        //     .check_chain_matches_proposal(proposal.clone(), txids.clone(), false)
+        //     .await;
+        // standard_send(&faucet, &recipient, sapling_dust, None).await;
+
+        // println!(
+        //     "sent to recipient
+        //     faucet: {}
+        //     recipient: {}",
+        //     serde_json::to_string_pretty(&faucet.do_balance().await).unwrap(),
+        //     serde_json::to_string_pretty(&recipient.do_balance().await).unwrap(),
+        // );
+        // zingo_testutils::increase_height_and_wait_for_client(&regtest_manager, &faucet, 1)
+        //     .await
+        //     .unwrap();
+        // println!(
+        //     "scenario initial
+        //     faucet: {}
+        //     recipient: {}",
+        //     serde_json::to_string_pretty(&faucet.do_balance().await).unwrap(),
+        //     serde_json::to_string_pretty(&recipient.do_balance().await).unwrap(),
+        // );
         // assert_eq!(
         //     recipient.do_shield(&[Pool::Sapling], None).await,
         //     Err(
@@ -3813,6 +3841,181 @@ mod basic_transactions {
         //     .await
         //     .unwrap();
     }
+
+    #[tokio::test]
+    async fn standard_proposal_send() {
+        let (regtest_manager, _cph, faucet, recipient) =
+            scenarios::faucet_recipient_default().await;
+
+        // let wallet_capability = faucet.wallet.wallet_capability().clone();
+        // let [o_fvk, s_fvk, t_fvk] =
+        //     zingo_testutils::build_fvks_from_wallet_capability(&wallet_capability);
+        // let fvks = vec![&o_fvk, &s_fvk, &t_fvk];
+        // let viewing_faucet = build_fvk_client(&fvks, faucet.config()).await;
+
+        recipient.do_sync(true).await.unwrap();
+        faucet.do_sync(true).await.unwrap();
+        println!(
+            "Recipient Balance: {:#?}\nFaucet Balance: {:#?}",
+            recipient.do_balance().await,
+            faucet.do_balance().await
+        );
+
+        // zingo_testutils::generate_n_blocks_return_new_height(&regtest_manager, 1)
+        //     .await
+        //     .unwrap();
+
+        // recipient.do_sync(true).await.unwrap();
+        // faucet.do_sync(true).await.unwrap();
+        // println!(
+        //     "Recipient Balance: {:#?}\nFaucet Balance: {:#?}",
+        //     recipient.do_balance().await,
+        //     faucet.do_balance().await
+        // );
+
+        let recipient_addr_uni = get_base_address!(recipient, "sapling");
+        let faucet_addr_uni = get_base_address!(faucet, "sapling");
+
+        let mut address_amount_memo_tuples = vec![(recipient_addr_uni.as_str(), 1_000_000, None)];
+        let mut proposal = faucet.do_propose(address_amount_memo_tuples.clone()).await;
+        assert!(proposal.is_ok());
+
+        println!(
+            "Grace Actions: {:#?}\nMarginal Fee: {:#?}\nTransaction Amount: {:#?}\nTotal Fee Required: {:#?}",
+            proposal.as_ref().unwrap().fee_rule().grace_actions(),
+            proposal
+                .as_ref()
+                .unwrap()
+                .fee_rule()
+                .marginal_fee()
+                .into_u64(),
+            proposal
+                .as_ref()
+                .unwrap()
+                .steps()
+                .head
+                .transaction_request()
+                .payments()
+                .get(&0)
+                .map(|payment| &payment.amount)
+                .unwrap()
+                .into_u64(),
+            proposal
+                .as_ref()
+                .unwrap()
+                .steps()
+                .head
+                .balance()
+                .fee_required()
+                .into_u64()
+        );
+
+        let mut tx = faucet.do_send_proposal().await;
+        println!("Full Tx: {:#?}", tx.as_ref().unwrap());
+
+        zingo_testutils::generate_n_blocks_return_new_height(&regtest_manager, 1)
+            .await
+            .unwrap();
+
+        recipient.do_sync(true).await.unwrap();
+        faucet.do_sync(true).await.unwrap(); //THIS CAUSES ERROR!
+        println!(
+            "Recipient Balance: {:#?}\nFaucet Balance: {:#?}",
+            recipient.do_balance().await,
+            faucet.do_balance().await
+        );
+
+        // zingo_testutils::generate_n_blocks_return_new_height(&regtest_manager, 1)
+        //     .await
+        //     .unwrap();
+
+        // recipient.do_sync(true).await.unwrap();
+        // faucet.do_sync(true).await.unwrap(); // THIS CAUSES ERROR!
+        // println!(
+        //     "Recipient Balance: {:#?}\nFaucet Balance: {:#?}",
+        //     recipient.do_balance().await,
+        //     faucet.do_balance().await
+        // );
+
+        address_amount_memo_tuples = vec![(faucet_addr_uni.as_str(), 20_000, None)];
+        proposal = recipient.do_propose(address_amount_memo_tuples).await;
+        assert!(proposal.is_ok());
+
+        println!(
+             "Grace Actions: {:#?}\nMarginal Fee: {:#?}\nTransaction Amount: {:#?}\nTotal Fee Required: {:#?}",
+             proposal.as_ref().unwrap().fee_rule().grace_actions(),
+             proposal
+                 .as_ref()
+                 .unwrap()
+                 .fee_rule()
+                 .marginal_fee()
+                 .into_u64(),
+             proposal
+                 .as_ref()
+                 .unwrap()
+                 .steps()
+                 .head
+                 .transaction_request()
+                 .payments()
+                 .get(&0)
+                 .map(|payment| &payment.amount)
+                 .unwrap()
+                 .into_u64(),
+             proposal
+                 .as_ref()
+                 .unwrap()
+                 .steps()
+                 .head
+                 .balance()
+                 .fee_required()
+                 .into_u64()
+         );
+
+        tx = recipient.do_send_proposal().await;
+        println!("Full Tx: {:#?}", tx.as_ref().unwrap());
+
+        recipient.do_sync(true).await.unwrap();
+        faucet.do_sync(true).await.unwrap(); // THIS CAUSES ERROR!
+        println!(
+            "Recipient Balance: {:#?}\nFaucet Balance: {:#?}",
+            recipient.do_balance().await,
+            faucet.do_balance().await
+        );
+
+        // println!(
+        //     "Recipient Notes: {:#?}\nFaucet Notes: {:#?}",
+        //     recipient.do_list_txsummaries().await,
+        //     faucet.do_list_txsummaries().await
+        // );
+    }
+
+    // #[tokio::test]
+    // async fn dust_proposal() {
+    //     let (_regtest_manager, _cph, faucet, recipient) =
+    //         scenarios::faucet_recipient_default().await;
+
+    //     let addr = get_base_address!(recipient, "unified");
+
+    //     let address_amount_memo_tuples = vec![(addr.as_str(), 20_000, None)];
+
+    //     let proposal = faucet.do_propose(address_amount_memo_tuples).await;
+
+    //     assert!(proposal.is_ok());
+    // }
+
+    // #[tokio::test]
+    // async fn transparent_proposal() {
+    //     let (_regtest_manager, _cph, faucet, recipient) =
+    //         scenarios::faucet_recipient_default().await;
+
+    //     let addr = get_base_address!(recipient, "transparent");
+
+    //     let address_amount_memo_tuples = vec![(addr.as_str(), 20_000, None)];
+
+    //     let proposal = faucet.do_propose(address_amount_memo_tuples).await;
+
+    //     assert!(proposal.is_ok());
+    // }
 }
 
 #[tokio::test]

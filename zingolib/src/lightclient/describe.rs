@@ -125,7 +125,7 @@ impl LightClient {
             let encoded_ua = address.encode(&self.config.chain);
             let transparent = address
                 .transparent()
-                .map(|taddr| address_from_pubkeyhash(&self.config, *taddr));
+                .map(|taddr| address_from_pubkeyhash(&self.config.chain, *taddr));
             objectified_addresses.push(object! {
             "address" => encoded_ua,
             "receivers" => object!(

@@ -49,7 +49,7 @@ impl FetchTaddrTransactions {
                 .addresses()
                 .iter()
                 .filter_map(|ua| ua.transparent())
-                .map(|taddr| address_from_pubkeyhash(&config, *taddr))
+                .map(|taddr| address_from_pubkeyhash(&config.chain, *taddr))
                 .collect::<Vec<_>>();
 
             // Fetch all transactions for all t-addresses in parallel, and process them in height order

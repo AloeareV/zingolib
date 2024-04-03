@@ -781,6 +781,6 @@ pub async fn get_transparent_secretkey_pubkey_taddr(
     };
     let taddr = wc.addresses()[0]
         .transparent()
-        .map(|taddr| address_from_pubkeyhash(&lightclient.config, *taddr));
+        .map(|taddr| address_from_pubkeyhash(&lightclient.config.chain, *taddr));
     (sk, pk, taddr)
 }

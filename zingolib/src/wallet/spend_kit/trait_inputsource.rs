@@ -89,18 +89,21 @@ impl InputSource for SpendKit<'_, '_> {
                                     .zip(repeat(transaction.status.get_confirmed_height()))
                             })
                             .filter_map(|(utxo, height)| {
-                                height.map(|h| {
-                                    WalletTransparentOutput::from_parts(
-                                        utxo.to_outpoint(),
-                                        TxOut {
-                                            value: NonNegativeAmount::from_u64(utxo.value).unwrap(), //review!
-                                            script_pubkey: zcash_primitives::legacy::Script(
-                                                utxo.script.clone(),
-                                            ),
-                                        },
-                                        h,
-                                    )
-                                })
+                                height
+                                    .map(|h| {
+                                        WalletTransparentOutput::from_parts(
+                                            utxo.to_outpoint(),
+                                            TxOut {
+                                                value: NonNegativeAmount::from_u64(utxo.value)
+                                                    .unwrap(), //review!
+                                                script_pubkey: zcash_primitives::legacy::Script(
+                                                    utxo.script.clone(),
+                                                ),
+                                            },
+                                            h,
+                                        )
+                                    })
+                                    .flatten()
                             })
                             .collect::<Vec<_>>(),
                     )

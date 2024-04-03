@@ -99,7 +99,7 @@ impl<const N: usize> ToBytes<N> for [u8; N] {
 /// Exposes the out_ciphertext, domain, and value_commitment in addition to the
 /// required methods of ShieldedOutput
 pub trait ShieldedOutputExt<D: Domain>: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE> {
-    fn domain(&self, height: BlockHeight, parameters: ChainType) -> D;
+    fn domain<P: Parameters>(&self, height: BlockHeight, parameters: &P) -> D;
     /// A decryption key for `enc_ciphertext`.  `out_ciphertext` is _itself_  decryptable
     /// with the `OutgoingCipherKey` "`ock`".
     fn out_ciphertext(&self) -> [u8; 80];
@@ -107,7 +107,7 @@ pub trait ShieldedOutputExt<D: Domain>: ShieldedOutput<D, ENC_CIPHERTEXT_SIZE> {
 }
 
 impl<A> ShieldedOutputExt<OrchardDomain> for Action<A> {
-    fn domain(&self, _block_height: BlockHeight, _parameters: ChainType) -> OrchardDomain {
+    fn domain<P: Parameters>(&self, _block_height: BlockHeight, _parameters: &P) -> OrchardDomain {
         OrchardDomain::for_action(self)
     }
 
@@ -121,11 +121,10 @@ impl<A> ShieldedOutputExt<OrchardDomain> for Action<A> {
 }
 
 impl ShieldedOutputExt<SaplingDomain> for OutputDescription<GrothProofBytes> {
-    fn domain(&self, height: BlockHeight, parameters: ChainType) -> SaplingDomain {
+    fn domain<P: Parameters>(&self, height: BlockHeight, parameters: &P) -> SaplingDomain {
         SaplingDomain::new(
             zcash_primitives::transaction::components::sapling::zip212_enforcement(
-                &parameters,
-                height,
+                parameters, height,
             ),
         )
     }
@@ -230,7 +229,7 @@ impl From<sapling_crypto::Nullifier> for PoolNullifier {
 pub trait Recipient {
     type Diversifier: Copy;
     fn diversifier(&self) -> Self::Diversifier;
-    fn b32encode_for_network(&self, chain: &ChainType) -> String;
+    fn b32encode_for_network<P: Parameters>(&self, chain: &P) -> String;
 }
 
 impl Recipient for orchard::Address {
@@ -240,7 +239,7 @@ impl Recipient for orchard::Address {
         orchard::Address::diversifier(self)
     }
 
-    fn b32encode_for_network(&self, chain: &ChainType) -> String {
+    fn b32encode_for_network<P: Parameters>(&self, chain: &P) -> String {
         unified::Encoding::encode(
             &<unified::Address as unified::Encoding>::try_from_items(vec![Receiver::Orchard(
                 self.to_raw_address_bytes(),
@@ -258,7 +257,7 @@ impl Recipient for sapling_crypto::PaymentAddress {
         *sapling_crypto::PaymentAddress::diversifier(self)
     }
 
-    fn b32encode_for_network(&self, chain: &ChainType) -> String {
+    fn b32encode_for_network<P: Parameters>(&self, chain: &P) -> String {
         encode_payment_address(chain.hrp_sapling_payment_address(), self)
     }
 }
@@ -427,7 +426,10 @@ where
     const NU: NetworkUpgrade;
     const NAME: &'static str;
 
-    type Fvk: Clone + Send + Diversifiable<Note = Self::WalletNote, Address = Self::Recipient>;
+    type FullViewingKey: Clone
+        + Send
+        + Diversifiable<Note = Self::WalletNote, Address = Self::Recipient>
+        + for<'a> TryFrom<&'a WalletCapability>;
 
     type SpendingKey: for<'a> TryFrom<&'a WalletCapability> + Clone;
     type CompactOutput: CompactOutput<Self>;
@@ -471,19 +473,41 @@ where
     ) -> &mut MemoryStoreShardTree<<Self::WalletNote as ShieldedNoteInterface>::Node>;
     fn get_nullifier_from_note_fvk_and_witness_position(
         note: &Self::Note,
-        fvk: &Self::Fvk,
+        fvk: &Self::FullViewingKey,
         position: u64,
     ) -> <Self::WalletNote as ShieldedNoteInterface>::Nullifier;
     fn get_tree(tree_state: &TreeState) -> &String;
     fn to_notes_vec(_: &TransactionRecord) -> &Vec<Self::WalletNote>;
     fn to_notes_vec_mut(_: &mut TransactionRecord) -> &mut Vec<Self::WalletNote>;
+
+    // domain generic transformations
     fn ua_from_contained_receiver<'a>(
         unified_spend_auth: &'a WalletCapability,
         receiver: &Self::Recipient,
     ) -> Option<&'a UnifiedAddress>;
-    fn wc_to_fvk(wc: &WalletCapability) -> Result<Self::Fvk, String>;
-    fn wc_to_ivk(wc: &WalletCapability) -> Result<Self::IncomingViewingKey, String>;
-    fn wc_to_ovk(wc: &WalletCapability) -> Result<Self::OutgoingViewingKey, String>;
+    fn wc_to_full_viewing_key(wc: &WalletCapability) -> Result<Self::FullViewingKey, String>;
+    fn full_viewing_key_scope_to_incoming_viewing_key(
+        full_viewing_key: Self::FullViewingKey,
+        scope: zip32::Scope,
+    ) -> <Self as Domain>::IncomingViewingKey;
+    // fn full_viewing_key_scope_to_incoming_viewing_key(
+    //     full_viewing_key: Self::FullViewingKey,
+    //     scope: zip32::Scope,
+    // ) -> <Self as Domain>::IncomingViewingKey {
+    //     <Self as Domain>::IncomingViewingKey::new(&full_viewing_key.to_ivk(scope))
+    // }
+    fn wc_scope_to_incoming_viewing_key(
+        wc: &WalletCapability,
+        scope: zip32::Scope,
+    ) -> Result<Self::IncomingViewingKey, String> {
+        Ok(Self::full_viewing_key_scope_to_incoming_viewing_key(
+            Self::wc_to_full_viewing_key(wc)?,
+            scope,
+        ))
+    }
+    fn wc_to_external_outgoing_viewing_key(
+        wc: &WalletCapability,
+    ) -> Result<Self::OutgoingViewingKey, String>;
     fn wc_to_sk(wc: &WalletCapability) -> Result<Self::SpendingKey, String>;
 }
 
@@ -491,7 +515,7 @@ impl DomainWalletExt for SaplingDomain {
     const NU: NetworkUpgrade = NetworkUpgrade::Sapling;
     const NAME: &'static str = "sapling";
 
-    type Fvk = sapling_crypto::zip32::DiversifiableFullViewingKey;
+    type FullViewingKey = sapling_crypto::zip32::DiversifiableFullViewingKey;
 
     type SpendingKey = sapling_crypto::zip32::ExtendedSpendingKey;
 
@@ -523,7 +547,7 @@ impl DomainWalletExt for SaplingDomain {
     }
     fn get_nullifier_from_note_fvk_and_witness_position(
         note: &Self::Note,
-        fvk: &Self::Fvk,
+        fvk: &Self::FullViewingKey,
         position: u64,
     ) -> <<Self as DomainWalletExt>::WalletNote as ShieldedNoteInterface>::Nullifier {
         note.nf(&fvk.fvk().vk.nk, position)
@@ -549,13 +573,18 @@ impl DomainWalletExt for SaplingDomain {
             .iter()
             .find(|ua| ua.sapling() == Some(receiver))
     }
-    fn wc_to_fvk(wc: &WalletCapability) -> Result<Self::Fvk, String> {
-        Self::Fvk::try_from(wc)
+    fn wc_to_full_viewing_key(wc: &WalletCapability) -> Result<Self::FullViewingKey, String> {
+        Self::FullViewingKey::try_from(wc)
     }
-    fn wc_to_ivk(wc: &WalletCapability) -> Result<Self::IncomingViewingKey, String> {
-        Self::IncomingViewingKey::try_from(wc)
+    fn full_viewing_key_scope_to_incoming_viewing_key(
+        full_viewing_key: Self::FullViewingKey,
+        scope: zip32::Scope,
+    ) -> <Self as Domain>::IncomingViewingKey {
+        <Self as Domain>::IncomingViewingKey::new(&full_viewing_key.to_ivk(scope))
     }
-    fn wc_to_ovk(wc: &WalletCapability) -> Result<Self::OutgoingViewingKey, String> {
+    fn wc_to_external_outgoing_viewing_key(
+        wc: &WalletCapability,
+    ) -> Result<Self::OutgoingViewingKey, String> {
         Self::OutgoingViewingKey::try_from(wc)
     }
 
@@ -568,7 +597,7 @@ impl DomainWalletExt for OrchardDomain {
     const NU: NetworkUpgrade = NetworkUpgrade::Nu5;
     const NAME: &'static str = "orchard";
 
-    type Fvk = orchard::keys::FullViewingKey;
+    type FullViewingKey = orchard::keys::FullViewingKey;
 
     type SpendingKey = orchard::keys::SpendingKey;
 
@@ -600,7 +629,7 @@ impl DomainWalletExt for OrchardDomain {
     }
     fn get_nullifier_from_note_fvk_and_witness_position(
         note: &Self::Note,
-        fvk: &Self::Fvk,
+        fvk: &Self::FullViewingKey,
         _position: u64,
     ) -> <<Self as DomainWalletExt>::WalletNote as ShieldedNoteInterface>::Nullifier {
         note.nullifier(fvk)
@@ -626,13 +655,18 @@ impl DomainWalletExt for OrchardDomain {
             .iter()
             .find(|unified_address| unified_address.orchard() == Some(receiver))
     }
-    fn wc_to_fvk(wc: &WalletCapability) -> Result<Self::Fvk, String> {
-        Self::Fvk::try_from(wc)
+    fn wc_to_full_viewing_key(wc: &WalletCapability) -> Result<Self::FullViewingKey, String> {
+        Self::FullViewingKey::try_from(wc)
     }
-    fn wc_to_ivk(wc: &WalletCapability) -> Result<Self::IncomingViewingKey, String> {
-        Self::IncomingViewingKey::try_from(wc)
+    fn full_viewing_key_scope_to_incoming_viewing_key(
+        full_viewing_key: Self::FullViewingKey,
+        scope: zip32::Scope,
+    ) -> <Self as Domain>::IncomingViewingKey {
+        <Self as Domain>::IncomingViewingKey::new(&full_viewing_key.to_ivk(scope))
     }
-    fn wc_to_ovk(wc: &WalletCapability) -> Result<Self::OutgoingViewingKey, String> {
+    fn wc_to_external_outgoing_viewing_key(
+        wc: &WalletCapability,
+    ) -> Result<Self::OutgoingViewingKey, String> {
         Self::OutgoingViewingKey::try_from(wc)
     }
 
@@ -921,7 +955,7 @@ impl ReadableWriteable<(sapling_crypto::Diversifier, &WalletCapability)> for sap
         let rseed = super::data::read_sapling_rseed(&mut reader)?;
 
         Ok(
-            <SaplingDomain as DomainWalletExt>::wc_to_fvk(wallet_capability)
+            <SaplingDomain as DomainWalletExt>::wc_to_full_viewing_key(wallet_capability)
                 .expect("to get an fvk from a wc")
                 .fvk()
                 .vk
@@ -964,7 +998,7 @@ impl ReadableWriteable<(orchard::keys::Diversifier, &WalletCapability)> for orch
             "Nullifier not for note",
         ))?;
 
-        let fvk = <OrchardDomain as DomainWalletExt>::wc_to_fvk(wallet_capability)
+        let fvk = <OrchardDomain as DomainWalletExt>::wc_to_full_viewing_key(wallet_capability)
             .expect("to get an fvk from a wc");
         Option::from(orchard::note::Note::from_parts(
             fvk.address(diversifier, orchard::keys::Scope::External),
