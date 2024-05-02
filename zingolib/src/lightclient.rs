@@ -735,7 +735,7 @@ mod tests {
             .expect("This path is available.");
 
         let wallet_name = data_dir.join("zingo-wallet.dat");
-        let regtest_network = RegtestNetwork::all_upgrades_active();
+        let regtest_network = RegtestNetwork::all_upgrades_activated_at_height_1();
         let config = ZingoConfig::build(ChainType::Regtest(regtest_network))
             .set_wallet_dir(data_dir)
             .create();
