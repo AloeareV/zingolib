@@ -1,4 +1,4 @@
-use crate::{error::ZingoLibError, utils::address_from_str, wallet::Pool};
+use crate::error::ZingoLibError;
 
 use super::*;
 
@@ -50,17 +50,9 @@ impl LightClient {
     ///
     /// Panics if the address conversion fails.
     #[cfg(feature = "test-features")]
-    pub async fn do_shield_test_only(
-        &self,
-        pools_to_shield: &[Pool],
-        address: Option<&str>,
-    ) -> Result<String, String> {
-        todo!()
-        // let address = address.map(|addr| {
-        //     address_from_str(addr, &self.config().chain).expect("should be a valid address")
-        // });
-        // self.do_shield(pools_to_shield, address)
-        //     .await
-        //     .map(|txid| txid.to_string())
+    pub async fn do_shield_test_only(&self) -> Result<String, String> {
+        self.do_quick_shield()
+            .await
+            .map(|txid| txid.first().to_string())
     }
 }
