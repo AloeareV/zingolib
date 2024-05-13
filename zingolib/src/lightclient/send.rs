@@ -231,7 +231,6 @@ pub mod send_with_proposal {
                 .get_submission_height()
                 .await
                 .map_err(CompleteAndBroadcastError::SubmissionHeight)?;
-
             let (sapling_output, sapling_spend): (Vec<u8>, Vec<u8>) =
                 read_sapling_params().map_err(CompleteAndBroadcastError::SaplingParams)?;
             let sapling_prover = LocalTxProver::from_bytes(&sapling_spend, &sapling_output);
