@@ -249,7 +249,7 @@ pub mod instantiation {
     use log::debug;
     use std::{
         io::{self, Error, ErrorKind},
-        sync::Arc,
+        sync::{Arc, Once},
     };
     use tokio::{
         runtime::Runtime,
@@ -264,6 +264,8 @@ pub mod instantiation {
         wallet::{LightWallet, WalletBase},
     };
 
+    static CRYPTO_PROVIDER: Once = Once::new();
+
     impl LightClient {
         // toDo rework ZingoConfig.
 
@@ -272,6 +274,12 @@ pub mod instantiation {
             let mut buffer: Vec<u8> = vec![];
             wallet.write(&mut buffer).await?;
             let config = wallet.transaction_context.config.clone();
+            CRYPTO_PROVIDER.call_once(|| {
+                // install default crypto provider (ring)
+                if let Err(e) = rustls::crypto::ring::default_provider().install_default() {
+                    eprintln!("Error installing crypto provider: {:?}", e)
+                };
+            });
             Ok(LightClient {
                 wallet,
                 config: config.clone(),
