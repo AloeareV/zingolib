@@ -781,7 +781,7 @@ mod fast {
         }
         #[tokio::test]
         async fn send_to_tex() {
-            let (ref _regtest_manager, _cph, ref faucet, sender, _txid) =
+            let (ref regtest_manager, _cph, ref faucet, sender, _txid) =
                 scenarios::faucet_funded_recipient_default(5_000_000).await;
 
             let tex_addr_from_first = first_taddr_to_tex(faucet);
@@ -792,6 +792,7 @@ mod fast {
 
             let transaction_request = TransactionRequest::new(payment).unwrap();
 
+            dbg!(sender.do_balance().await);
             let proposal = sender.propose_send(transaction_request).await.unwrap();
             assert_eq!(proposal.steps().len(), 2usize);
             let _sent_txids_according_to_broadcast = sender
@@ -823,6 +824,11 @@ mod fast {
                 val_tranfers[0].recipient_address().unwrap(),
                 tex_addr_from_first.encode()
             );
+            dbg!(sender.do_balance().await);
+            increase_height_and_wait_for_client(&regtest_manager, &sender, 101)
+                .await
+                .unwrap();
+            dbg!(sender.do_balance().await);
         }
     }
 
